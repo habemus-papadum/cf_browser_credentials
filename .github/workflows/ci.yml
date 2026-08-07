@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (frozen lockfile — also the lockfile-drift guard)
+        run: pnpm install --frozen-lockfile
+
+      - name: Lockstep version invariant
+        run: node scripts/versioning.mjs current
+
+      - name: Build all packages
+        run: pnpm -r run build
+
+      - name: Typecheck
+        run: pnpm -r run typecheck
+
+      - name: Lint & format check (Biome)
+        run: pnpm run lint
+
+      - name: Test
+        run: pnpm run test

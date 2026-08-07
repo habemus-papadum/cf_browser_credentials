@@ -1,0 +1,7 @@
+packages:
+  - "packages/*"
+
+# pnpm blocks dependency build scripts by default; allow the ones we trust.
+# (esbuild ships a prebuilt binary but runs a postinstall to link it.)
+allowBuilds:
+  esbuild: true

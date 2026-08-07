@@ -1,0 +1,34 @@
+{
+  "name": "@habemus-papadum/cf-browser-credentials",
+  "version": "0.0.0+dev",
+  "description": "A TypeScript library for minting ephemeral credentials from a Cloudflare worker for an otherwise static site",
+  "type": "module",
+  "license": "MIT",
+  "author": "Nehal Patel <nehal@alum.mit.edu>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/cf_browser_credentials.git",
+    "directory": "packages/cf-browser-credentials"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  }
+}

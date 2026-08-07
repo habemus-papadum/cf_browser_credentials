@@ -1,0 +1,185 @@
+name: release
+
+# The ONLY publish path. There is no local release script and no tag trigger,
+# which is what makes a local/CI double-publish impossible. Run from the Actions
+# UI (release -> Run workflow) or: gh workflow run release.yml -f bump=minor
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Release size relative to the last release tag"
+        type: choice
+        options: [patch, minor, major]
+        default: minor
+      skip_ci_check:
+        description: "Release even if this commit's CI isn't green (skip the gate)"
+        type: boolean
+        default: false
+      dry_run:
+        description: "Compute the version + show the diff, but do NOT commit/tag/publish"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    if: ${{ !inputs.skip_ci_check }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read # read ci.yml run status
+    steps:
+      - name: Wait for ci.yml and require success on ${{ github.sha }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          jq_row='if length>0 then (.[0] | [.status, (.conclusion // ""), .url] | @tsv) else "" end'
+          for i in $(seq 1 60); do # up to ~30 min (60 x 30s)
+            ROW=$(gh run list -w ci.yml -c "$SHA" -e push -L 1 --json status,conclusion,url --jq "$jq_row")
+            if [ -z "$ROW" ]; then echo "no ci.yml push run for $SHA yet... ($i/60)"; sleep 30; continue; fi
+            IFS=$'\t' read -r STATUS CONCL URL <<<"$ROW"
+            if [ "$STATUS" = "completed" ]; then
+              if [ "$CONCL" = "success" ]; then echo "::notice::CI green on $SHA"; exit 0; fi
+              echo "::error::ci.yml concluded '$CONCL' on $SHA ($URL) — fix CI, or re-dispatch with skip_ci_check=true."
+              exit 1
+            fi
+            echo "ci.yml still $STATUS on $SHA... ($i/60)"
+            sleep 30
+          done
+          echo "::error::timed out waiting for ci.yml on $SHA"
+          exit 1
+
+  prepare:
+    needs: [gate]
+    if: ${{ !cancelled() && needs.gate.result != 'failure' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      tag: ${{ steps.ver.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # need every tag for latest-tag
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Compute this release's version
+        id: ver
+        run: |
+          RELEASE=$(node scripts/versioning.mjs compute-release "${{ inputs.bump }}")
+          LAST=$(node scripts/versioning.mjs latest-tag)
+          echo "Last release: ${LAST:-<none>} -> this release: $RELEASE"
+          echo "version=$RELEASE" >> "$GITHUB_OUTPUT"
+          echo "tag=v$RELEASE" >> "$GITHUB_OUTPUT"
+
+      - name: Write the release version across every package.json
+        run: |
+          node scripts/versioning.mjs set "${{ steps.ver.outputs.version }}"
+          pnpm install --lockfile-only
+          {
+            echo "### Release ${{ steps.ver.outputs.version }}"
+            echo ''
+            echo '```'
+            git --no-pager diff --stat
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dry run — stop here (no commit/tag/publish)
+        if: ${{ inputs.dry_run }}
+        run: echo "::notice::DRY RUN — computed ${{ steps.ver.outputs.version }} but did not commit, tag, or publish."
+
+      - name: Commit, tag, push
+        if: ${{ !inputs.dry_run }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "${{ steps.ver.outputs.version }}"
+          git tag -a "${{ steps.ver.outputs.tag }}" -m "${{ steps.ver.outputs.version }}"
+          git push origin "HEAD:${GITHUB_REF_NAME}" "refs/tags/${{ steps.ver.outputs.tag }}"
+
+  npm-publish:
+    needs: [prepare]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # provenance attestation (independent of the token publish)
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r run build
+
+      - name: Publish to npm
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc-publish"
+          export NPM_CONFIG_USERCONFIG="$HOME/.npmrc-publish"
+          # ONE recursive publish across packages/*. pnpm auto-skips private:true
+          # packages and expands each workspace:^ dep to ^<release> at pack time.
+          #
+          # Auth = NPM_TOKEN; --provenance = OIDC attestation only. This split is the
+          # documented steady state: pnpm's OIDC trusted-publishing handshake still
+          # 404s (pnpm #9812 / #11513). Future migration once fixed: drop NPM_TOKEN and
+          # publish per-tarball via `npm publish <tarball> --provenance` (npm >= 11.5.1).
+          pnpm -r publish --provenance --no-git-checks
+          rm -f "$HOME/.npmrc-publish"
+
+  github-release:
+    needs: [prepare, npm-publish]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          generate_release_notes: true
+
+  finalize:
+    needs: [prepare, npm-publish]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Set the +dev marker and push
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          node scripts/versioning.mjs set "${{ needs.prepare.outputs.version }}+dev"
+          pnpm install --lockfile-only
+          git commit -am "back to dev (${{ needs.prepare.outputs.version }}+dev)"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
