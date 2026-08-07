@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/cf-creds-elevenlabs",
-  "version": "0.1.0",
+  "version": "0.1.0+dev",
   "description": "ElevenLabs single-use realtime tokens: worker-side mint from a parent key, browser-side fetch-per-connect helpers",
   "type": "module",
   "license": "MIT",
