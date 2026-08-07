@@ -1,0 +1,33 @@
+{
+  "name": "@habemus-papadum/cf-loopback-cors",
+  "version": "0.0.0+dev",
+  "description": "Loopback-only CORS echo: allow localhost dev servers on any port to call a cookie-authenticated endpoint, without ever using CORS to reject",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/cf_browser_credentials.git",
+    "directory": "packages/cf-loopback-cors"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  }
+}

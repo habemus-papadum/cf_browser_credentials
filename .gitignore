@@ -24,3 +24,5 @@ pnpm-debug.log*
 
 # Throwaway npmrc written by CI at publish time
 .npmrc-publish
+docs/.vitepress/cache/
+docs/.vitepress/dist/

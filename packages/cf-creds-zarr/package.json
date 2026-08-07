@@ -1,0 +1,36 @@
+{
+  "name": "@habemus-papadum/cf-creds-zarr",
+  "version": "0.0.0+dev",
+  "description": "Signed range reads for zarr-over-S3: a ranged Reader over signed fetch for zip stores and friends",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/cf_browser_credentials.git",
+    "directory": "packages/cf-creds-zarr"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@habemus-papadum/cf-creds-aws": "workspace:^"
+  }
+}

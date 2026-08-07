@@ -1,0 +1,45 @@
+{
+  "name": "@habemus-papadum/cf-creds-openai",
+  "version": "0.0.0+dev",
+  "description": "Keyless OpenAI in the browser via AWS workload identity federation: mint GetWebIdentityToken JWTs from ephemeral credentials, exchange handled by the OpenAI SDK",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/cf_browser_credentials.git",
+    "directory": "packages/cf-creds-openai"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@habemus-papadum/cf-browser-credentials": "workspace:^",
+    "@habemus-papadum/cf-creds-aws": "workspace:^"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-sts": "^3.1104.0",
+    "openai": "^7.4.0"
+  },
+  "peerDependencies": {
+    "@aws-sdk/client-sts": "^3.1104.0",
+    "openai": "^7.4.0"
+  }
+}
