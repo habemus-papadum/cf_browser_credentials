@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/cf-browser-credentials",
-  "version": "0.2.2",
+  "version": "0.2.2+dev",
   "description": "A TypeScript library for minting ephemeral credentials from a Cloudflare worker for an otherwise static site",
   "type": "module",
   "license": "MIT",

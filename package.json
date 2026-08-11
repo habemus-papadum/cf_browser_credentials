@@ -1,6 +1,6 @@
 {
   "name": "cf_browser_credentials",
-  "version": "0.2.2",
+  "version": "0.2.2+dev",
   "private": true,
   "type": "module",
   "description": "cf_browser_credentials — a lockstep-versioned TypeScript monorepo.",
