@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { assumeRole } from "./index.js";
+import { assumeRole, sessionNameFor } from "./index.js";
 
 const STS_XML = `<AssumeRoleResponse>
   <AssumeRoleResult><Credentials>
@@ -41,5 +41,47 @@ describe("assumeRole", () => {
     await expect(assumeRole(source, "arn:aws:iam::123:role/r", 7200)).rejects.toThrow(
       /403.*denied/s,
     );
+  });
+
+  it("passes session name and session tags through to STS", async () => {
+    const fetchMock = vi.fn(async () => new Response(STS_XML, { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await assumeRole(source, "arn:aws:iam::123:role/r", 7200, {
+      sessionName: "nehal@example.com",
+      tags: { email: "nehal@example.com", site: "demo" },
+    });
+
+    const body = await (fetchMock.mock.calls[0][0] as Request).text();
+    const params = new URLSearchParams(body);
+    expect(params.get("RoleSessionName")).toBe("nehal@example.com");
+    expect(params.get("Tags.member.1.Key")).toBe("email");
+    expect(params.get("Tags.member.1.Value")).toBe("nehal@example.com");
+    expect(params.get("Tags.member.2.Key")).toBe("site");
+    expect(params.get("Tags.member.2.Value")).toBe("demo");
+  });
+});
+
+describe("sessionNameFor", () => {
+  it("uses a user's email verbatim — the STS charset admits it", () => {
+    expect(sessionNameFor({ kind: "user", email: "nehal@example.com", claims: {} })).toBe(
+      "nehal@example.com",
+    );
+  });
+
+  it("uses a service token's client id", () => {
+    expect(sessionNameFor({ kind: "service-token", commonName: "abc123.access", claims: {} })).toBe(
+      "abc123.access",
+    );
+  });
+
+  it("sanitises and truncates hostile input", () => {
+    const name = sessionNameFor({
+      kind: "user",
+      email: `we ird/${"x".repeat(80)}`,
+      claims: {},
+    });
+    expect(name).toMatch(/^we-ird-x+$/);
+    expect(name).toHaveLength(64);
   });
 });

@@ -25,13 +25,19 @@ federated exchanges, single-use tokens. The worker is never on the data path.
   worker or any other means); the credential worker claims only
   `/api/credentials/*` on the same hostname. Path routes beat the custom
   domain, so the two deploy independently.
-- **Cloudflare Access is the entire auth story.** Access (with your IdP)
-  gates the hostname and sets a cookie; the worker trusts that cookie
-  completely and never inspects identity claims. This is deliberately a
-  **single-user posture** — one person who trusts themselves, minting
-  credentials to reduce friction, not a multi-tenant system. The worker's
-  only defensive move is a tripwire: 401 when the Access JWT header is
-  missing, which would mean it's reachable around the gate.
+- **Cloudflare Access gates; the worker verifies and records.** Access
+  (with your IdP) fronts the hostname and forwards a signed JWT on every
+  request; the worker verifies that signature against the team's published
+  keys and extracts the caller's identity — a user's email, or a service
+  token's client id for headless lanes. The posture is **attribution before
+  authorization**: every mint is logged and stamped with the identity that
+  asked (the AWS session name lands in CloudTrail on every subsequent
+  call), while the shipped policy still admits everyone Access admits —
+  the high-trust, low-friction default for a small unit that trusts
+  itself. Differentiating per identity — a scoped-down role for an agent,
+  a shorter TTL, a denied lane — is a pluggable mint policy, not a
+  rewrite. Verification also hardens the old presence-only tripwire: a
+  misconfigured route can no longer be satisfied by a fabricated header.
 - **Providers are routes.** `/api/credentials/aws` returns STS role
   credentials; `/api/credentials/elevenlabs` returns a single-use realtime
   token; each route holds its own upstream secret as a wrangler secret. The
@@ -61,7 +67,7 @@ ElevenLabs package deliberately bypasses it for the third.
 | Package | Role |
 |---|---|
 | [cf-browser-credentials](/packages/cf-browser-credentials) | generic in-browser credential manager |
-| [cf-creds-worker](/packages/cf-creds-worker) | worker-side mint kit (STS AssumeRole) + the canonical broker |
+| [cf-creds-worker](/packages/cf-creds-worker) | worker-side mint kit: STS AssumeRole, Access identity verification, mint policy + log |
 | [cf-loopback-cors](/packages/cf-loopback-cors) | loopback-only CORS echo for the cross-origin dev flow |
 | [cf-creds-aws](/packages/cf-creds-aws) | AWS envelope, typed manager, SigV4 signed fetch, ListObjectsV2 |
 | [cf-creds-openai](/packages/cf-creds-openai) | keyless OpenAI via AWS workload identity federation |
