@@ -38,6 +38,11 @@
     "@uwdata/mosaic-core": "^0.29.2"
   },
   "peerDependencies": {
-    "@uwdata/mosaic-core": "^0.29.2"
+    "@uwdata/mosaic-core": ">=0.28 <0.31"
+  },
+  "peerDependenciesMeta": {
+    "@uwdata/mosaic-core": {
+      "optional": true
+    }
   }
 }
