@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/cf-loopback-cors",
-  "version": "0.2.1",
+  "version": "0.2.1+dev",
   "description": "Loopback-only CORS echo: allow localhost dev servers on any port to call a cookie-authenticated endpoint, without ever using CORS to reject",
   "type": "module",
   "license": "MIT",
