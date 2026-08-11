@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/cf-creds-worker",
-  "version": "0.1.0+dev",
+  "version": "0.2.0",
   "description": "Server-side mint kit for a Cloudflare Worker credential broker: STS AssumeRole over fetch, runtime-agnostic",
   "type": "module",
   "license": "MIT",
