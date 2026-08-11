@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/cf-creds-zarr",
-  "version": "0.2.0",
+  "version": "0.2.0+dev",
   "description": "Signed range reads for zarr-over-S3: a ranged Reader over signed fetch for zip stores and friends",
   "type": "module",
   "license": "MIT",
