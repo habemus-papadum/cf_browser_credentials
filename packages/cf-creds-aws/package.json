@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/cf-creds-aws",
-  "version": "0.3.0",
+  "version": "0.3.0+dev",
   "description": "Signed fetch for browsers holding ephemeral AWS credentials: SigV4 via aws4fetch, client cached per credential session",
   "type": "module",
   "license": "MIT",

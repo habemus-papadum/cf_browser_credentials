@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/cf-creds-openai",
-  "version": "0.3.0",
+  "version": "0.3.0+dev",
   "description": "Keyless OpenAI in the browser via AWS workload identity federation: mint GetWebIdentityToken JWTs from ephemeral credentials, exchange handled by the OpenAI SDK",
   "type": "module",
   "license": "MIT",
