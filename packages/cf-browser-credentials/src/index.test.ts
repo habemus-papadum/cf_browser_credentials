@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CredentialManager, type EphemeralCredential } from "./index.js";
+import {
+  AccessLoginRequired,
+  CredentialManager,
+  type EphemeralCredential,
+  fetchCredentials,
+} from "./index.js";
 
 interface AwsCredentials extends EphemeralCredential {
   accessKeyId: string;
@@ -81,5 +86,64 @@ describe("CredentialManager", () => {
     );
     const manager = new CredentialManager<AwsCredentials>({ url: "/api/credentials/aws" });
     await expect(manager.get()).rejects.toThrow(/401.*no Cloudflare Access identity/s);
+  });
+});
+
+describe("fetchCredentials login bounce", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // A browser-shaped page origin: bounce auto-enables for cross-origin URLs.
+    vi.stubGlobal("location", new URL("https://app.example.com/"));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it("opens a login window on cross-origin auth failure, then retries", async () => {
+    const close = vi.fn();
+    const open = vi.fn(() => ({ close, closed: false }));
+    vi.stubGlobal("window", { open });
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        calls += 1;
+        // First fetch: the CORS-shaped failure Access produces for a
+        // background request with no cookie. After the "login": success.
+        if (calls === 1) throw new TypeError("Failed to fetch");
+        return new Response(JSON.stringify({ minted: true }), { status: 200 });
+      }),
+    );
+    const pending = fetchCredentials("https://creds.example.com/api/credentials/aws");
+    await vi.advanceTimersByTimeAsync(1500);
+    const res = await pending;
+    expect((await res.json()).minted).toBe(true);
+    expect(open).toHaveBeenCalledOnce();
+    expect(close).toHaveBeenCalled();
+  });
+
+  it("throws AccessLoginRequired when the popup is blocked", async () => {
+    vi.stubGlobal("window", { open: vi.fn(() => null) });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+    await expect(
+      fetchCredentials("https://creds.example.com/api/credentials/aws"),
+    ).rejects.toBeInstanceOf(AccessLoginRequired);
+  });
+
+  it("does not bounce same-origin failures", async () => {
+    const open = vi.fn();
+    vi.stubGlobal("window", { open });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("nope", { status: 401 })),
+    );
+    await expect(fetchCredentials("/api/credentials/aws")).rejects.toThrow(/401: nope/);
+    expect(open).not.toHaveBeenCalled();
   });
 });

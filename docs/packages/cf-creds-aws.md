@@ -7,7 +7,10 @@ session, so key derivation isn't repeated across thousands of range reads.
 
 Also home to the AWS flavour of the credential pattern: the `AwsCredentials`
 envelope the AWS broker route returns, and a typed manager factory defaulting
-to the conventional `/api/credentials/aws` route.
+to the conventional `/api/credentials/aws` route. Pass `base` (and optionally
+`role`) to target a well-known credentials service instead — cross-origin
+first-touch auth is handled by the login bounce in
+`@habemus-papadum/cf-browser-credentials`.
 
 ```ts
 import {
@@ -17,6 +20,8 @@ import {
 } from "@habemus-papadum/cf-creds-aws";
 
 const manager = createAwsCredentialManager();
+// …or against a well-known credentials service:
+// createAwsCredentialManager({ base: "https://creds.example.com", role: "smoke" });
 const signedFetch = createSignedFetch(manager, { region: "us-east-1" });
 
 // Plain S3 URLs, signed per request:

@@ -24,19 +24,44 @@ export interface AwsCredentials extends EphemeralCredential {
 /** The conventional broker route for AWS credentials. */
 export const AWS_CREDENTIALS_PATH = "/api/credentials/aws";
 
+/**
+ * The endpoint URL for a named role at a well-known credentials service,
+ * e.g. `awsCredentialsUrl("https://creds.example.com", "smoke")`.
+ */
+export function awsCredentialsUrl(base: string, role?: string): string {
+  const url = new URL(AWS_CREDENTIALS_PATH, base);
+  if (role) url.searchParams.set("role", role);
+  return url.toString();
+}
+
 export interface AwsCredentialManagerOptions {
-  /** Defaults to {@link AWS_CREDENTIALS_PATH}, same-origin. */
+  /** Full endpoint URL; overrides `base`/`role`. Defaults to {@link AWS_CREDENTIALS_PATH}, same-origin. */
   url?: string;
+  /** Origin of a well-known credentials service, e.g. `https://creds.example.com`. */
+  base?: string;
+  /** Named role at the well-known service (its `?role=` parameter). Requires `base`. */
+  role?: string;
   refreshMarginMs?: number;
+  /** See `CredentialFetchOptions` in cf-browser-credentials. */
+  bounce?: boolean;
+  loginUrl?: string;
 }
 
 /** A manager typed to the AWS envelope, defaulting to the conventional route. */
 export function createAwsCredentialManager(
   options: AwsCredentialManagerOptions = {},
 ): CredentialManager<AwsCredentials> {
+  if (options.role && !options.base) {
+    throw new Error("role requires base — the well-known credentials service origin");
+  }
+  const url =
+    options.url ??
+    (options.base ? awsCredentialsUrl(options.base, options.role) : AWS_CREDENTIALS_PATH);
   return new CredentialManager<AwsCredentials>({
-    url: options.url ?? AWS_CREDENTIALS_PATH,
+    url,
     refreshMarginMs: options.refreshMarginMs,
+    bounce: options.bounce,
+    loginUrl: options.loginUrl,
   });
 }
 

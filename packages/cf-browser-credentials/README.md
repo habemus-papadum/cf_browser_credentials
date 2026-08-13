@@ -2,9 +2,11 @@
 
 Browser-side credential manager for static sites whose ephemeral credentials
 are minted by a broker endpoint (typically a Cloudflare Worker behind
-Cloudflare Access), one route per provider — `/api/credentials/aws`,
-`/api/credentials/elevenlabs`, …. Caches in memory, refreshes before expiry,
-deduplicates concurrent fetches, notifies consumers on rotation.
+Cloudflare Access) — same-origin routes (`/api/credentials/aws`,
+`/api/credentials/elevenlabs`, …) or a **well-known cross-origin credentials
+service** (e.g. `https://creds.example.com`). Caches in memory, refreshes
+before expiry, deduplicates concurrent fetches, notifies consumers on
+rotation.
 
 The manager is **generic over the credential envelope**: each provider route
 returns its own shape, and the only field the manager itself requires is
@@ -42,3 +44,17 @@ Semantics worth relying on:
 
 The cross-origin dev flow requires the broker to echo loopback origins with
 credentials allowed — see `@habemus-papadum/cf-loopback-cors`.
+
+## The login bounce
+
+Access cookies are per-hostname, so the first fetch of a session against a
+cross-origin credentials service fails before the browser holds that host's
+cookie (Access 302s the background fetch into an IdP flow, surfacing as a
+CORS error). `fetchCredentials` — used by the manager and exported directly —
+handles this automatically for cross-origin URLs: it opens the endpoint in a
+popup once (a top-level navigation completes the SSO dance and sets the
+cookie), polls until the fetch succeeds, and closes the popup. Pass
+`loginUrl` to bounce via a dedicated self-closing page (e.g. `/api/login`)
+when the service offers one, `bounce: false` to opt out, and catch
+`AccessLoginRequired` to rerun the bounce from a user gesture when the
+popup is blocked.

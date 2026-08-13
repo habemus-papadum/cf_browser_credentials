@@ -16,7 +16,11 @@
  * @packageDocumentation
  */
 
-import type { EphemeralCredential } from "@habemus-papadum/cf-browser-credentials";
+import {
+  type CredentialFetchOptions,
+  type EphemeralCredential,
+  fetchCredentials,
+} from "@habemus-papadum/cf-browser-credentials";
 
 /** Fixed by ElevenLabs; no ttl/expires_in parameter exists. */
 export const SCRIBE_TOKEN_TTL_SECONDS = 900;
@@ -61,11 +65,9 @@ export async function mintScribeToken(apiKey: string): Promise<ScribeToken> {
  */
 export async function fetchScribeToken(
   url: string = ELEVENLABS_CREDENTIALS_PATH,
+  options: CredentialFetchOptions = {},
 ): Promise<ScribeToken> {
-  const res = await fetch(url, { credentials: "include" });
-  if (!res.ok) {
-    throw new Error(`scribe token fetch failed (${res.status}): ${await res.text()}`);
-  }
+  const res = await fetchCredentials(url, options);
   return (await res.json()) as ScribeToken;
 }
 
@@ -98,7 +100,8 @@ export function scribeSocketUrl(token: string, options: ScribeSocketOptions = {}
 export async function connectUrl(
   brokerUrl: string = ELEVENLABS_CREDENTIALS_PATH,
   options: ScribeSocketOptions = {},
+  fetchOptions: CredentialFetchOptions = {},
 ): Promise<string> {
-  const { token } = await fetchScribeToken(brokerUrl);
+  const { token } = await fetchScribeToken(brokerUrl, fetchOptions);
   return scribeSocketUrl(token, options);
 }

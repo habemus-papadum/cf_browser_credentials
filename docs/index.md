@@ -21,10 +21,15 @@ federated exchanges, single-use tokens. The worker is never on the data path.
 
 ## The parts
 
-- **One origin.** The static site lives in R2 (served by its own catch-all
-  worker or any other means); the credential worker claims only
-  `/api/credentials/*` on the same hostname. Path routes beat the custom
-  domain, so the two deploy independently.
+- **One origin — or one well-known service.** In the same-origin shape, the
+  static site lives in R2 (served by its own catch-all worker or any other
+  means) and the credential worker claims only `/api/credentials/*` on the
+  same hostname; path routes beat the custom domain, so the two deploy
+  independently. The alternative shape is a single **well-known credentials
+  service** on its own hostname (e.g. `https://creds.example.com`) serving
+  every site: pages call it cross-origin with `credentials: "include"`, and
+  the kit's login bounce handles the per-hostname Access cookie on first
+  touch (see `cf-browser-credentials`).
 - **Cloudflare Access gates; the worker verifies and records.** Access
   (with your IdP) fronts the hostname and forwards a signed JWT on every
   request; the worker verifies that signature against the team's published

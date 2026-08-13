@@ -1,6 +1,12 @@
 import type { CredentialManager } from "@habemus-papadum/cf-browser-credentials";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type AwsCredentials, createSignedFetch, listObjects } from "./index.js";
+import {
+  type AwsCredentials,
+  awsCredentialsUrl,
+  createAwsCredentialManager,
+  createSignedFetch,
+  listObjects,
+} from "./index.js";
 
 const manager = (sessionToken: string) =>
   ({
@@ -31,6 +37,18 @@ describe("createSignedFetch", () => {
     const request = fetchMock.mock.calls[0][0] as Request;
     expect(request.headers.get("authorization")).toMatch(/AWS4-HMAC-SHA256/);
     expect(request.headers.get("x-amz-security-token")).toBe("tok");
+  });
+});
+
+describe("createAwsCredentialManager", () => {
+  it("builds the well-known service URL from base and role", () => {
+    expect(awsCredentialsUrl("https://creds.example.com", "smoke")).toBe(
+      "https://creds.example.com/api/credentials/aws?role=smoke",
+    );
+  });
+
+  it("throws when role is given without base", () => {
+    expect(() => createAwsCredentialManager({ role: "smoke" })).toThrow(/role requires base/);
   });
 });
 
