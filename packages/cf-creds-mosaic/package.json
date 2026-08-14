@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/cf-creds-mosaic",
-  "version": "0.4.0",
+  "version": "0.4.0+dev",
   "description": "Credential-aware Mosaic connector: install rotating S3 credentials into DuckDB-Wasm at the query boundary",
   "type": "module",
   "license": "MIT",
