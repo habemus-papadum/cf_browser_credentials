@@ -9,7 +9,10 @@
  */
 
 import {
+  type BrokerRouteOptions,
   CredentialManager,
+  type CredentialTarget,
+  credentialsUrl,
   type EphemeralCredential,
 } from "@habemus-papadum/cf-browser-credentials";
 import { AwsClient } from "aws4fetch";
@@ -19,28 +22,31 @@ export interface AwsCredentials extends EphemeralCredential {
   accessKeyId: string;
   secretAccessKey: string;
   sessionToken: string;
+  /**
+   * The region the key's grant targets. Present under the key contract, so
+   * a site can drop its baked region constant — see {@link createSignedFetch}.
+   */
+  region?: string;
 }
 
 /** The conventional broker route for AWS credentials. */
 export const AWS_CREDENTIALS_PATH = "/api/credentials/aws";
 
 /**
- * The endpoint URL for a named role at a well-known credentials service,
- * e.g. `awsCredentialsUrl("https://creds.example.com", "smoke")`.
+ * The endpoint URL at a well-known credentials service for a target — the
+ * site's own key, e.g. `awsCredentialsUrl("https://creds.example.com", { key: "scratch" })`.
+ * A bare string is the deprecated `role` shorthand.
  */
-export function awsCredentialsUrl(base: string, role?: string): string {
-  const url = new URL(AWS_CREDENTIALS_PATH, base);
-  if (role) url.searchParams.set("role", role);
-  return url.toString();
+export function awsCredentialsUrl(base: string, target: string | CredentialTarget = {}): string {
+  return credentialsUrl(AWS_CREDENTIALS_PATH, {
+    base,
+    ...(typeof target === "string" ? { role: target } : target),
+  });
 }
 
-export interface AwsCredentialManagerOptions {
-  /** Full endpoint URL; overrides `base`/`role`. Defaults to {@link AWS_CREDENTIALS_PATH}, same-origin. */
+export interface AwsCredentialManagerOptions extends BrokerRouteOptions {
+  /** Full endpoint URL; overrides `base`/`key`. Defaults to {@link AWS_CREDENTIALS_PATH}, same-origin. */
   url?: string;
-  /** Origin of a well-known credentials service, e.g. `https://creds.example.com`. */
-  base?: string;
-  /** Named role at the well-known service (its `?role=` parameter). Requires `base`. */
-  role?: string;
   refreshMarginMs?: number;
   /** See `CredentialFetchOptions` in cf-browser-credentials. */
   bounce?: boolean;
@@ -51,14 +57,8 @@ export interface AwsCredentialManagerOptions {
 export function createAwsCredentialManager(
   options: AwsCredentialManagerOptions = {},
 ): CredentialManager<AwsCredentials> {
-  if (options.role && !options.base) {
-    throw new Error("role requires base — the well-known credentials service origin");
-  }
-  const url =
-    options.url ??
-    (options.base ? awsCredentialsUrl(options.base, options.role) : AWS_CREDENTIALS_PATH);
   return new CredentialManager<AwsCredentials>({
-    url,
+    url: credentialsUrl(AWS_CREDENTIALS_PATH, options),
     refreshMarginMs: options.refreshMarginMs,
     bounce: options.bounce,
     loginUrl: options.loginUrl,
@@ -69,7 +69,12 @@ export function createAwsCredentialManager(
 export type SignedFetch = (input: string | Request, init?: RequestInit) => Promise<Response>;
 
 export interface SignedFetchOptions {
-  region: string;
+  /**
+   * Region to sign for. Optional when the envelope carries one (the key
+   * contract): the credential's own region is then the default, and an
+   * explicit value here still wins.
+   */
+  region?: string;
   /** AWS service to sign for. */
   service?: string;
   /** Observe every response (request counting, byte accounting). */
@@ -83,15 +88,21 @@ export interface SignedFetchOptions {
  */
 export function createSignedFetch(
   manager: CredentialManager<AwsCredentials>,
-  options: SignedFetchOptions,
+  options: SignedFetchOptions = {},
 ): SignedFetch {
   const { region, service = "s3", onResponse } = options;
   let aws: AwsClient | undefined;
   let session: string | undefined;
   return async (input, init) => {
     const creds = await manager.get();
+    const signingRegion = region ?? creds.region;
+    if (!signingRegion) {
+      throw new Error(
+        "no region to sign with — pass options.region, or use a broker route that returns one",
+      );
+    }
     if (!aws || session !== creds.sessionToken) {
-      aws = new AwsClient({ ...creds, region, service });
+      aws = new AwsClient({ ...creds, region: signingRegion, service });
       session = creds.sessionToken;
     }
     const res = await aws.fetch(input as RequestInfo, init);

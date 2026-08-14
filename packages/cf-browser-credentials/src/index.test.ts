@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AccessLoginRequired,
   CredentialManager,
+  credentialsUrl,
   type EphemeralCredential,
   fetchCredentials,
 } from "./index.js";
@@ -32,6 +33,41 @@ function stubFetch(responses: AwsCredentials[]) {
   );
   return () => calls;
 }
+
+describe("credentialsUrl", () => {
+  const PATH = "/api/credentials/aws";
+  const BASE = "https://creds.example.com";
+
+  it("carries the site's own key to a well-known service", () => {
+    expect(credentialsUrl(PATH, { base: BASE, key: "scratch" })).toBe(
+      "https://creds.example.com/api/credentials/aws?key=scratch",
+    );
+  });
+
+  it("still builds the legacy role lane", () => {
+    expect(credentialsUrl(PATH, { base: BASE, role: "smoke" })).toBe(
+      "https://creds.example.com/api/credentials/aws?role=smoke",
+    );
+  });
+
+  it("defaults to the same-origin route, and an explicit url wins", () => {
+    expect(credentialsUrl(PATH)).toBe(PATH);
+    expect(credentialsUrl(PATH, { url: "/elsewhere", base: BASE, key: "scratch" })).toBe(
+      "/elsewhere",
+    );
+  });
+
+  it("rejects key and role together", () => {
+    expect(() => credentialsUrl(PATH, { base: BASE, key: "scratch", role: "smoke" })).toThrow(
+      /mutually exclusive/,
+    );
+  });
+
+  it("rejects a target without a base to aim it at", () => {
+    expect(() => credentialsUrl(PATH, { key: "scratch" })).toThrow(/key requires base/);
+    expect(() => credentialsUrl(PATH, { role: "smoke" })).toThrow(/role requires base/);
+  });
+});
 
 describe("CredentialManager", () => {
   beforeEach(() => {

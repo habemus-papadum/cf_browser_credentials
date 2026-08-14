@@ -45,6 +45,34 @@ Semantics worth relying on:
 The cross-origin dev flow requires the broker to echo loopback origins with
 credentials allowed — see `@habemus-papadum/cf-loopback-cors`.
 
+## The key contract
+
+A page addresses a well-known credentials service by **key**: it sends its
+own name and nothing else, and the route answers with everything needed to
+consume the credential — for AWS the STS envelope *plus* its region, for
+OpenAI that envelope plus the whole federation config. Internal names (role
+ARNs, service accounts, provider ids, audiences) never reach site code, so
+re-pointing a site at a different grant is a broker-side edit and no site
+republishes.
+
+`credentialsUrl` builds those URLs; each provider package wraps it with its
+own route path, so pages normally pass `{ base, key }` to a factory and
+never see this:
+
+```ts
+import { credentialsUrl } from "@habemus-papadum/cf-browser-credentials";
+
+credentialsUrl("/api/credentials/aws", { base: "https://creds.example.com", key: "scratch" });
+// → "https://creds.example.com/api/credentials/aws?key=scratch"
+
+credentialsUrl("/api/credentials/aws"); // → same-origin route, unchanged
+```
+
+The predecessor is the `role` lane (`?role=`), where the page named the
+grant rather than itself. It still resolves and is deprecated. A key or a
+role requires `base` — neither means anything against a same-origin route —
+and the two are mutually exclusive.
+
 ## The login bounce
 
 Access cookies are per-hostname, so the first fetch of a session against a

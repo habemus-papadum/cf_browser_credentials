@@ -19,19 +19,24 @@ if (url.pathname === `${base}/elevenlabs`) {
 }
 ```
 
-Browser, one call per connection:
+Browser, one call per connection. Against a well-known credentials service
+the page names **itself** — its `key` — and the broker resolves the rest:
 
 ```ts
 import { connectUrl } from "@habemus-papadum/cf-creds-elevenlabs";
 
 const ws = new WebSocket(
-  await connectUrl("/api/credentials/elevenlabs", {
-    audioFormat: "pcm_24000",
-    includeTimestamps: true,
-  }),
+  await connectUrl(
+    { base: "https://creds.example.com", key: "scratch" },
+    { audioFormat: "pcm_24000", includeTimestamps: true },
+  ),
 );
 // first inbound frame on success: {"message_type":"session_started",…}
 ```
+
+`connectUrl` and `fetchScribeToken` both still take a bare URL string in
+place of the broker options — `connectUrl("/api/credentials/elevenlabs")` is
+the same-origin route, unchanged.
 
 Facts baked in from live probing: mint is
 `POST /v1/single-use-token/realtime_scribe` with `xi-api-key`; the token type

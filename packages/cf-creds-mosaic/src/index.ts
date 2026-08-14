@@ -9,6 +9,10 @@
  * (current duckdb-wasm builds reject the former); the resolved mode is
  * reported through `onInstall`.
  *
+ * The region installs alongside the keys: under the key contract it rides in
+ * the envelope, so a keyed page passes no region at all and each install
+ * takes the one belonging to the credentials it is installing.
+ *
  * @packageDocumentation
  */
 
@@ -19,6 +23,12 @@ import type { Connector } from "@uwdata/mosaic-core";
 export type InstallMode = "CREATE SECRET" | "SET s3_*";
 
 export interface CredentialAwareOptions {
+  /**
+   * Region to install. Optional when the envelope carries one (the key
+   * contract): each install then takes the region from the credentials it is
+   * installing, and an explicit value here still wins.
+   */
+  region?: string;
   /** When it returns true, force a fresh mint on every query. */
   forceRefresh?: () => boolean;
   /** Observe each install (mode resolution, rotation counting). */
@@ -30,14 +40,41 @@ const q = (value: string) => `'${value.replaceAll("'", "''")}'`;
 export function credentialAwareConnector(
   base: Connector,
   manager: CredentialManager<AwsCredentials>,
+  options?: CredentialAwareOptions,
+): Connector;
+/**
+ * @deprecated The region is part of the credential now. Pass it as
+ * `options.region` — or drop it entirely and let the envelope supply it.
+ */
+export function credentialAwareConnector(
+  base: Connector,
+  manager: CredentialManager<AwsCredentials>,
   region: string,
-  options: CredentialAwareOptions = {},
+  options?: CredentialAwareOptions,
+): Connector;
+export function credentialAwareConnector(
+  base: Connector,
+  manager: CredentialManager<AwsCredentials>,
+  regionOrOptions: string | CredentialAwareOptions = {},
+  legacyOptions: CredentialAwareOptions = {},
 ): Connector {
+  const options: CredentialAwareOptions =
+    typeof regionOrOptions === "string"
+      ? { ...legacyOptions, region: legacyOptions.region ?? regionOrOptions }
+      : regionOrOptions;
   let installedKey: string | undefined;
   let installing: Promise<void> | undefined;
   let mode: InstallMode | undefined;
 
   async function install(creds: AwsCredentials): Promise<void> {
+    // Resolved per install, not once at construction: a rotation can carry a
+    // different region, and the credential is the only place it comes from.
+    const region = options.region ?? creds.region;
+    if (!region) {
+      throw new Error(
+        "no region to install — pass options.region, or use a broker route that returns one",
+      );
+    }
     const secretSql = `CREATE OR REPLACE SECRET broker (
       TYPE s3,
       KEY_ID ${q(creds.accessKeyId)},

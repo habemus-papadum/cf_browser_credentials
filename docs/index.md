@@ -47,6 +47,15 @@ federated exchanges, single-use tokens. The worker is never on the data path.
   credentials; `/api/credentials/elevenlabs` returns a single-use realtime
   token; each route holds its own upstream secret as a wrangler secret. The
   one contract every response honours: an ISO-8601 `expiration` field.
+- **A page names itself, not the grant — the key contract.** A site sends
+  only its own key (`?key=scratch`) alongside the ambient Access identity,
+  and the route answers with everything needed to consume the credential:
+  for AWS the STS envelope plus its region, for OpenAI that envelope plus
+  the entire federation config in one mint. Role ARNs, service accounts,
+  provider ids and audiences stay on the broker, which means re-pointing a
+  site at a different grant is a broker-side edit and no site republishes.
+  The predecessor — `?role=`, where the page named the grant — still
+  resolves and is deprecated.
 - **Dev is the deployed worker, cross-origin.** A dev server on any
   localhost port calls the production broker with the Access cookie riding
   along (`credentials: "include"`); the worker echoes loopback origins only

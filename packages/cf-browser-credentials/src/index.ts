@@ -12,6 +12,11 @@
  * listeners — is provider-agnostic. Provider-specific envelope types and
  * consumption helpers live in sibling packages (`cf-creds-aws`, …).
  *
+ * A page addresses the broker by **key**: it sends its own name (`?key=`)
+ * and nothing else, and the route answers with the whole bundle needed to
+ * consume the credential. {@link credentialsUrl} builds those URLs; the
+ * provider packages wrap it with their own route path.
+ *
  * Cross-origin endpoints add one wrinkle: Access cookies are per-hostname,
  * so the first fetch of a session can fail (Access 302s the request into an
  * IdP flow that a background fetch cannot complete — it surfaces as a CORS
@@ -27,6 +32,59 @@
 export interface EphemeralCredential {
   /** ISO-8601 expiration timestamp; the manager refreshes ahead of it. */
   expiration: string;
+}
+
+/**
+ * How a page names what it wants from the broker — **the key contract**: a
+ * site sends only its own key and the ambient Access identity, and the
+ * broker answers with everything needed to consume the credential. Internal
+ * names (role ARNs, service accounts, provider ids, regions, audiences)
+ * never reach site code, so re-pointing a site is a broker-side edit.
+ */
+export interface CredentialTarget {
+  /**
+   * The site's own name at the credentials service (its `?key=` parameter).
+   * Requires `base` — a key is meaningless against a same-origin route.
+   */
+  key?: string;
+  /**
+   * @deprecated The legacy `?role=` lane, which named an internal role from
+   * site code. Name the site itself with {@link CredentialTarget.key}.
+   */
+  role?: string;
+}
+
+/** Where a provider route lives, and which target to ask it for. */
+export interface BrokerRouteOptions extends CredentialTarget {
+  /** Full endpoint URL; overrides `base` and the target. */
+  url?: string;
+  /** Origin of a well-known credentials service, e.g. `https://creds.example.com`. */
+  base?: string;
+}
+
+/**
+ * Resolve a provider route (`/api/credentials/<species>`) to an endpoint
+ * URL: an explicit `url` wins, otherwise `base` + `path` carrying the
+ * target, otherwise the same-origin `path`.
+ */
+export function credentialsUrl(path: string, options: BrokerRouteOptions = {}): string {
+  const { url, base, key, role } = options;
+  if (key && role) {
+    throw new Error(
+      "key and role are mutually exclusive — key is the contract, role the legacy lane",
+    );
+  }
+  if ((key || role) && !base) {
+    throw new Error(
+      `${key ? "key" : "role"} requires base — the well-known credentials service origin`,
+    );
+  }
+  if (url) return url;
+  if (!base) return path;
+  const resolved = new URL(path, base);
+  if (key) resolved.searchParams.set("key", key);
+  else if (role) resolved.searchParams.set("role", role);
+  return resolved.toString();
 }
 
 /** How {@link fetchCredentials} reacts to an auth-shaped failure. */

@@ -14,17 +14,31 @@ import { DuckDBWASMConnector, coordinator } from "@uwdata/vgplot";
 import { createAwsCredentialManager } from "@habemus-papadum/cf-creds-aws";
 import { credentialAwareConnector } from "@habemus-papadum/cf-creds-mosaic";
 
-const manager = createAwsCredentialManager();
+const manager = createAwsCredentialManager({
+  base: "https://creds.example.com",
+  key: "scratch", // this site's own name at the service
+});
 const base = new DuckDBWASMConnector({ duckdb: db, connection });
-const connector = credentialAwareConnector(base, manager, "us-east-1", {
+const connector = credentialAwareConnector(base, manager, {
   onInstall: (mode, creds) => console.log(`installed via ${mode}`, creds.accessKeyId),
 });
 coordinator().databaseConnector(connector);
 ```
 
+The region installs alongside the keys. Under the key contract it rides in
+the envelope, so nothing above names one; each install takes the region
+belonging to the credentials it is installing, which keeps a rotation that
+moves buckets honest. Pass `options.region` when the broker returns none (an
+older route, or a bucket elsewhere) — an explicit value always wins, and with
+neither the install fails loudly rather than signing for the wrong region.
+
 Install prefers `CREATE OR REPLACE SECRET` and falls back to `SET s3_*`
 (current duckdb-wasm builds reject the former); `onInstall` reports which
 mode resolved. `forceRefresh` exists for rotation torture-testing.
+
+The pre-key-contract signature — `credentialAwareConnector(base, manager,
+"us-east-1", options)`, with the region as a third positional — still works
+and is deprecated; move that value to `options.region`, or drop it.
 
 Traffic reality, measured (duckdb-wasm ≤ 1.33): the S3 layer downloads whole
 objects on first touch — no column-pruned range reads — then serves

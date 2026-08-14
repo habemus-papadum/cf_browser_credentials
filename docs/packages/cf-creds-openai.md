@@ -19,21 +19,20 @@ Peers: `openai`, `@aws-sdk/client-sts`.
 
 ## Browser walkthrough
 
+Under the key contract the page names only itself. One mint of
+`/api/credentials/openai?key=…` returns the whole bundle — the STS envelope
+plus the region, audience, identity-provider id and service-account id both
+legs need — so nothing about the federation is baked into site code:
+
 ```ts
-import { createAwsCredentialManager } from "@habemus-papadum/cf-creds-aws";
-import { createFederatedOpenAI } from "@habemus-papadum/cf-creds-openai";
+import { createBrokeredOpenAI } from "@habemus-papadum/cf-creds-openai";
 
-// Dev servers point at the deployed broker; production uses the same origin.
-const manager = createAwsCredentialManager({
-  url: import.meta.env.DEV ? "https://example.com/api/credentials/aws" : undefined,
+const { client, manager } = await createBrokeredOpenAI({
+  base: "https://creds.example.com",
+  key: "scratch", // this site's own name at the service
 });
 
-const client = createFederatedOpenAI({
-  manager,
-  region: "us-east-1",
-  identityProviderId: "idp_…", // OpenAI dashboard: provider registration
-  serviceAccountId: "user-…",  // the service account the mapping targets
-});
+manager.onRotate((creds) => showExpiry(creds.expiration));
 
 // From here it is just the OpenAI SDK:
 const models = await client.models.list();
@@ -43,6 +42,13 @@ const response = await client.responses.create({
 });
 ```
 
+The factory is async for one reason: the broker's ids are known only after
+the bundle has been fetched, so the first mint happens inside it. The
+returned `manager` is that same credential manager, typed to the
+`OpenAICredentials` bundle — `onRotate` for UI, `refresh()` to force a mint.
+`createOpenAICredentialManager` builds it alone if a page wants the
+credentials without a client.
+
 Browser gotchas the factory absorbs — both found the hard way:
 
 - `dangerouslyAllowBrowser: true` is required by the SDK in browsers, even
@@ -50,6 +56,33 @@ Browser gotchas the factory absorbs — both found the hard way:
 - The SDK's token-exchange helper calls its stored fetch method-style
   (`this.fetch(...)`), which browsers reject as an illegal invocation; the
   factory supplies a binding-preserving fetch wrapper.
+
+## Legacy: ids passed from site code
+
+`createFederatedOpenAI` is the pre-key-contract entry point: same client,
+but every id arrives as a constant from the page.
+
+```ts
+import { createAwsCredentialManager } from "@habemus-papadum/cf-creds-aws";
+import { createFederatedOpenAI } from "@habemus-papadum/cf-creds-openai";
+
+const manager = createAwsCredentialManager();
+const client = createFederatedOpenAI({
+  manager,
+  region: "us-east-1",
+  identityProviderId: "idp_…", // OpenAI dashboard: provider registration
+  serviceAccountId: "user-…",  // the service account the mapping targets
+});
+```
+
+It still works and is deprecated — what it asks for is exactly what the
+broker now returns. `awsSubjectTokenProvider` is the piece underneath both
+paths, and stays useful on its own for observing a subject token:
+
+```ts
+const provider = awsSubjectTokenProvider({ manager, region: "us-east-1" });
+const jwt = await provider.getToken(); // sub = the role ARN, ~300s lifetime
+```
 
 ## Infra prerequisites (one-time)
 

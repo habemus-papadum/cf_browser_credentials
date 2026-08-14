@@ -17,18 +17,22 @@ import { DuckDBWASMConnector, Selection, coordinator } from "@uwdata/vgplot";
 import { createAwsCredentialManager, createSignedFetch, listObjects } from "@habemus-papadum/cf-creds-aws";
 import { credentialAwareConnector } from "@habemus-papadum/cf-creds-mosaic";
 
-const manager = createAwsCredentialManager();
+// The page names only itself; the region arrives with the credentials.
+const manager = createAwsCredentialManager({
+  base: "https://creds.example.com",
+  key: "scratch",
+});
 
 // Wrap Mosaic's connector; the credential check now guards ALL queries.
 const base = new DuckDBWASMConnector({ duckdb: db, connection });
-const connector = credentialAwareConnector(base, manager, "us-east-1", {
+const connector = credentialAwareConnector(base, manager, {
   onInstall: (mode) => console.log(`credentials installed via ${mode}`),
 });
 coordinator().databaseConnector(connector);
 
 // Multi-file view: list with the SDK, read with DuckDB (S3 globbing is not
 // supported by duckdb-wasm — ListObjectsV2 is the reliable path).
-const signedFetch = createSignedFetch(manager, { region: "us-east-1" });
+const signedFetch = createSignedFetch(manager);
 const endpoint = "https://bucket.s3.us-east-1.amazonaws.com";
 const keys = await listObjects(signedFetch, endpoint, "taxi/yellow/");
 const files = keys.map((k) => `'s3://bucket/${k}'`).join(", ");
@@ -58,6 +62,13 @@ document.querySelector("#app")!.append(
 
 - Install prefers `CREATE OR REPLACE SECRET` and falls back to `SET s3_*`
   (current duckdb-wasm builds reject the former); `onInstall` reports which.
+- **The region installs alongside the keys**, resolved per install from the
+  credentials being installed — so a rotation that moves buckets stays
+  honest. `options.region` overrides it for a broker that returns none (an
+  older route, or a bucket elsewhere); with neither, the install fails loudly
+  rather than signing for the wrong region. The pre-key-contract signature
+  `credentialAwareConnector(base, manager, "us-east-1", options)` still works
+  and is deprecated.
 - **Traffic reality** (duckdb-wasm ≤ 1.33): the S3 layer downloads whole
   objects on first touch — no column-pruned range reads, even for a
   single-column aggregate — then serves everything from its filesystem
