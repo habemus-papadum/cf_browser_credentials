@@ -90,9 +90,13 @@ describe("createAwsCredentialManager", () => {
     );
   });
 
-  it("throws when a target is given without base", () => {
-    expect(() => createAwsCredentialManager({ role: "smoke" })).toThrow(/role requires base/);
-    expect(() => createAwsCredentialManager({ key: "scratch" })).toThrow(/key requires base/);
+  it("accepts a target without base — the key rides the same-origin route", () => {
+    // The broker's key contract has no default bundle: same origin says
+    // where the broker lives, never which grant is meant. This package once
+    // refused key-without-base; that collided live with a lane minter's 400
+    // on the keyless route (2026-08-24).
+    expect(() => createAwsCredentialManager({ key: "scratch" })).not.toThrow();
+    expect(() => createAwsCredentialManager({ role: "smoke" })).not.toThrow();
   });
 
   it("throws when key and role are given together", () => {

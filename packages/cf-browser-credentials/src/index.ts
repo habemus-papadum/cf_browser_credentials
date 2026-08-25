@@ -44,7 +44,12 @@ export interface EphemeralCredential {
 export interface CredentialTarget {
   /**
    * The site's own name at the credentials service (its `?key=` parameter).
-   * Requires `base` — a key is meaningless against a same-origin route.
+   * Carried on same-origin routes too: the broker's key contract is
+   * universal — the key selects the pre-authorized bundle, and a broker
+   * deliberately serves no default — so "same origin" says where the
+   * broker lives, never which grant is meant. (This module once refused a
+   * key without `base`; that collided live with a lane minter's 400 on the
+   * keyless route, 2026-08-24.)
    */
   key?: string;
   /**
@@ -74,13 +79,15 @@ export function credentialsUrl(path: string, options: BrokerRouteOptions = {}): 
       "key and role are mutually exclusive — key is the contract, role the legacy lane",
     );
   }
-  if ((key || role) && !base) {
-    throw new Error(
-      `${key ? "key" : "role"} requires base — the well-known credentials service origin`,
-    );
-  }
   if (url) return url;
-  if (!base) return path;
+  if (!base) {
+    // Same-origin: the path stays relative, but the target still rides it —
+    // the broker's key contract has no default bundle.
+    const target = key ? (["key", key] as const) : role ? (["role", role] as const) : undefined;
+    if (target === undefined) return path;
+    const sep = path.includes("?") ? "&" : "?";
+    return `${path}${sep}${target[0]}=${encodeURIComponent(target[1])}`;
+  }
   const resolved = new URL(path, base);
   if (key) resolved.searchParams.set("key", key);
   else if (role) resolved.searchParams.set("role", role);

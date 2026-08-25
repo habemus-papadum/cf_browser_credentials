@@ -63,9 +63,19 @@ describe("credentialsUrl", () => {
     );
   });
 
-  it("rejects a target without a base to aim it at", () => {
-    expect(() => credentialsUrl(PATH, { key: "scratch" })).toThrow(/key requires base/);
-    expect(() => credentialsUrl(PATH, { role: "smoke" })).toThrow(/role requires base/);
+  it("carries the key on the same-origin route too — the broker has no default bundle", () => {
+    // A lane minter 400s a keyless route ("a missing key is always an
+    // error"); refusing key-without-base here collided with that live
+    // (2026-08-24). Same origin says where the broker lives, not which
+    // grant is meant.
+    expect(credentialsUrl(PATH, { key: "pitch" })).toBe("/api/credentials/aws?key=pitch");
+    expect(credentialsUrl(PATH, { role: "smoke" })).toBe("/api/credentials/aws?role=smoke");
+    // A path that already carries a query gains the target with '&'.
+    expect(credentialsUrl(`${PATH}?v=2`, { key: "pitch" })).toBe(
+      "/api/credentials/aws?v=2&key=pitch",
+    );
+    // Encoding survives.
+    expect(credentialsUrl(PATH, { key: "a b" })).toBe("/api/credentials/aws?key=a%20b");
   });
 });
 
