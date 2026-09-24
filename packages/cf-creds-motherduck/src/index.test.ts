@@ -13,7 +13,7 @@ import {
 
 const envelope = (token: string, ttlMs = 3_600_000): MotherDuckCredentials => ({
   token,
-  serviceAccount: "fm_reader",
+  serviceAccount: "reader",
   expiration: new Date(Date.now() + ttlMs).toISOString(),
 });
 

@@ -67,8 +67,8 @@ coordinator().databaseConnector(wasmConnector({ duckdb: db, connection: await co
 
 // Dual execution: a local table joined to a cloud table in one statement.
 const agent = await connect();
-await agent.query(`CREATE TABLE picks AS SELECT * FROM (VALUES ('ESZ5'), ('NQZ5')) t(symbol)`);
-await agent.query(`SELECT r.symbol, count(*) FROM fm.main.bbo r JOIN picks USING (symbol) GROUP BY 1`);
+await agent.query(`CREATE TABLE picks AS SELECT * FROM (VALUES ('north'), ('south')) t(region)`);
+await agent.query(`SELECT r.region, count(*) FROM shop.main.orders r JOIN picks USING (region) GROUP BY 1`);
 ```
 
 A dev page with an injected token uses `staticMotherDuckToken(token)` as the
@@ -109,13 +109,20 @@ makes the cloud side read-only.
 
 ## Two more rules, measured the same day
 
-- **`MD_ALL_DATABASES()` on a raw `connect()` connection wedges the whole
-  engine** — alone, every time, every other connection with it; the client's
-  own connection (`handle.connection.evaluateQuery`) handles it. `md_user_info()`,
-  `md_live_duckling_size()`, `duckdb_databases()`, `information_schema.*`,
-  `DESCRIBE` and table scans are fine raw. Keep Mosaic on a raw connection (its
-  SQL never calls `md_*`); run free-form SQL — anything a person or a model types
-  — through the client's connection.
+- **`MD_ALL_DATABASES()` under duckdb-wasm's blocking `RUN_QUERY` protocol
+  wedges the whole engine** — `connection.query()` (and Mosaic's `runQuery`)
+  never returns from it, alone, every time, and every connection on the engine
+  hangs with it (one worker, one queue). The same statement on the same raw
+  connection through the pending-query protocol (`connection.send()`) answers
+  in about 200 ms, and that is the path the client's own connection
+  (`handle.connection.evaluateQuery`) rides under its sequencer.
+  `md_user_info()`, `md_live_duckling_size()`, `duckdb_databases()`,
+  `information_schema.*`, `DESCRIBE` and table scans are fine either way. Keep
+  Mosaic on a raw connection (its SQL never calls `md_*`); run free-form SQL —
+  anything a person or a model types — through the client's connection. The
+  record (the probes, the two protocols, the choices if revisited) is the aiui
+  docs' duckdb-mosaic guide, Part 4b, "The RUN_QUERY wedge":
+  <https://habemus-papadum.github.io/pdum_aiui/packages/aiui-viz/duckdb-mosaic>.
 - **A cloud table reaches a vgplot mark through a local view**, not a qualified
   name: `from("db.main.t")` quotes one identifier and `from(["db","main","t"])`
   is spread into three tables and cross-joined. `CREATE OR REPLACE VIEW t AS
