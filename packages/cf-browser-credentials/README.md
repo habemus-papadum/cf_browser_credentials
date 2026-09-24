@@ -69,9 +69,9 @@ credentialsUrl("/api/credentials/aws"); // → same-origin route, unchanged
 ```
 
 The predecessor is the `role` lane (`?role=`), where the page named the
-grant rather than itself. It still resolves and is deprecated. A key or a
-role requires `base` — neither means anything against a same-origin route —
-and the two are mutually exclusive.
+grant rather than itself. It still resolves and is deprecated. A key rides same-origin routes too
+(the broker serves no default bundle, so the key always says which grant is
+meant); key and role are mutually exclusive.
 
 ## The login bounce
 

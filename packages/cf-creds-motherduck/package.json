@@ -1,0 +1,53 @@
+{
+  "name": "@habemus-papadum/cf-creds-motherduck",
+  "version": "0.4.1+dev",
+  "description": "MotherDuck in the browser with broker-minted read-scaling tokens: the session-species manager and an engine holder over @motherduck/wasm-client that survives rotation",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/cf_browser_credentials.git",
+    "directory": "packages/cf-creds-motherduck"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@habemus-papadum/cf-browser-credentials": "workspace:^"
+  },
+  "devDependencies": {
+    "@motherduck/wasm-client": "^1.5.5-r.1",
+    "apache-arrow": "^17.0.0"
+  },
+  "peerDependencies": {
+    "@motherduck/wasm-client": ">=1.5.5-r.1",
+    "apache-arrow": "^17.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@motherduck/wasm-client": {
+      "optional": true
+    },
+    "apache-arrow": {
+      "optional": true
+    }
+  }
+}

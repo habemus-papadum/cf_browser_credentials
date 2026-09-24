@@ -121,8 +121,10 @@ needs nothing extra.
 Adding providers is adding routes: each `/api/credentials/<name>` returns
 its own envelope, and the one contract every envelope must honour is an
 `expiration` field (ISO-8601) — that is what the browser-side manager
-schedules refresh against. A vendor-key provider (e.g. ElevenLabs) is a
-route that calls the vendor's ephemeral-token API with a wrangler-secret key
-and returns `{ …vendorFields, expiration }`. Give every route the same
+schedules refresh against. A vendor-key provider (ElevenLabs, MotherDuck) is a
+route that calls the vendor's token API with a wrangler-secret key
+and returns `{ …vendorFields, expiration }` — for MotherDuck, a read-scaling
+token of the service account the key's grant names, named after the visitor's
+identity plus the mint time (token names are unique per account). Give every route the same
 treatment: verify once, consult the policy under its provider key, log the
 outcome.

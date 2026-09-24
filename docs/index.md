@@ -68,7 +68,7 @@ matter more than which vendor issues it:
 
 | Species | Behaviour | Client model | Example |
 |---|---|---|---|
-| **Session credential** | Valid for hours, reusable | `CredentialManager`: cache, refresh before expiry, notify on rotation | AWS STS role creds |
+| **Session credential** | Valid for hours, reusable | `CredentialManager`: cache, refresh before expiry, notify on rotation | AWS STS role creds; MotherDuck read-scaling tokens |
 | **Federated exchange** | Browser holds one credential, derives another | Provider callback the consuming SDK re-invokes | OpenAI workload identity |
 | **Single-use token** | Consumed at first use | Fetch immediately before each connection — never cache | ElevenLabs realtime |
 
@@ -87,4 +87,5 @@ ElevenLabs package deliberately bypasses it for the third.
 | [cf-creds-openai](/packages/cf-creds-openai) | keyless OpenAI via AWS workload identity federation |
 | [cf-creds-elevenlabs](/packages/cf-creds-elevenlabs) | single-use realtime tokens |
 | [cf-creds-mosaic](/packages/cf-creds-mosaic) | credential-aware Mosaic/DuckDB-Wasm connector |
+| [cf-creds-motherduck](/packages/cf-creds-motherduck) | MotherDuck in the tab: token manager + engine holder over the wasm client |
 | [cf-creds-zarr](/packages/cf-creds-zarr) | signed range reads for zarr stores |

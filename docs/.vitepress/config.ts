@@ -29,6 +29,7 @@ export default defineConfig({
           { text: "cf-creds-openai", link: "/packages/cf-creds-openai" },
           { text: "cf-creds-elevenlabs", link: "/packages/cf-creds-elevenlabs" },
           { text: "cf-creds-mosaic", link: "/packages/cf-creds-mosaic" },
+          { text: "cf-creds-motherduck", link: "/packages/cf-creds-motherduck" },
           { text: "cf-creds-zarr", link: "/packages/cf-creds-zarr" },
         ],
       },
