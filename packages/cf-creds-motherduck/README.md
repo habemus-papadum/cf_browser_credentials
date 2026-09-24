@@ -107,6 +107,21 @@ nothing local to lose.
 in-memory DuckDB (which cannot open read-only) — the read-scaling token is what
 makes the cloud side read-only.
 
+## Two more rules, measured the same day
+
+- **`MD_ALL_DATABASES()` on a raw `connect()` connection wedges the whole
+  engine** — alone, every time, every other connection with it; the client's
+  own connection (`handle.connection.evaluateQuery`) handles it. `md_user_info()`,
+  `md_live_duckling_size()`, `duckdb_databases()`, `information_schema.*`,
+  `DESCRIBE` and table scans are fine raw. Keep Mosaic on a raw connection (its
+  SQL never calls `md_*`); run free-form SQL — anything a person or a model types
+  — through the client's connection.
+- **A cloud table reaches a vgplot mark through a local view**, not a qualified
+  name: `from("db.main.t")` quotes one identifier and `from(["db","main","t"])`
+  is spread into three tables and cross-joined. `CREATE OR REPLACE VIEW t AS
+  SELECT * FROM "db"."main"."t"` in the tab's catalog copies nothing and pushes
+  the scan down.
+
 ## Mosaic pre-aggregation, measured
 
 Over a 766 k-row remote table through a local view, with two linked
