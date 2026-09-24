@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/cf-creds-motherduck",
-  "version": "0.5.1",
+  "version": "0.5.1+dev",
   "description": "MotherDuck in the browser with broker-minted read-scaling tokens: the session-species manager and an engine holder over @motherduck/wasm-client that survives rotation",
   "type": "module",
   "license": "MIT",
