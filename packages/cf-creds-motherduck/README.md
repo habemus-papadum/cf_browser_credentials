@@ -32,10 +32,14 @@ return Response.json({ token, expiration: expire_at, serviceAccount }, { headers
 
 The token's `name` carries the Access identity, so MotherDuck's token list and
 `QUERY_HISTORY` attribute each mint to a visitor; `DELETE .../tokens/<id>`
-revokes one. **Names are unique per account** — a second mint under the same
-name answers `409 CONFLICT` ("A token with that name already exists"), and an
-expired token still holds its name — so the route suffixes the identity with
-the mint time (`alice@example.com#m3k9…`) rather than naming the visitor alone. Compute is a property of the account, never of the token, so a
+revokes one. A `name` is **required** (1–255 characters; the API has no
+anonymous or unnamed token, and the only other credential it mints, a Dive
+embed session, is not a DuckDB token) and **unique among the account's live
+tokens**: a second mint under a live name answers `409 CONFLICT` ("A token with
+that name already exists"); revocation frees the name at once and expiry within
+minutes. A visitor's second tab or refresh is therefore a second live token
+under the same identity, so the route suffixes the identity with the mint time
+(`alice@example.com#m3k9…`) rather than naming the visitor alone. Compute is a property of the account, never of the token, so a
 different tier for a different audience is a different service account in the
 grant, not a different token type.
 

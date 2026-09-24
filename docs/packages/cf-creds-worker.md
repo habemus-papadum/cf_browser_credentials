@@ -125,6 +125,7 @@ schedules refresh against. A vendor-key provider (ElevenLabs, MotherDuck) is a
 route that calls the vendor's token API with a wrangler-secret key
 and returns `{ …vendorFields, expiration }` — for MotherDuck, a read-scaling
 token of the service account the key's grant names, named after the visitor's
-identity plus the mint time (token names are unique per account). Give every route the same
+identity plus the mint time (a name is required, and unique among the
+account's live tokens). Give every route the same
 treatment: verify once, consult the policy under its provider key, log the
 outcome.
