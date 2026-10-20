@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/cf-creds-openai",
-  "version": "0.6.0",
+  "version": "0.6.0+dev",
   "description": "Keyless OpenAI in the browser: a credentials service's own OIDC token, exchanged by the OpenAI SDK's workload identity federation",
   "type": "module",
   "license": "MIT",
