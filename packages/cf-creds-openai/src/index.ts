@@ -1,49 +1,33 @@
 /**
- * Keyless OpenAI in the browser via AWS workload identity federation.
+ * Keyless OpenAI in the browser, federated straight from the credentials
+ * service's own OIDC issuer.
  *
- * The chain, entirely client-side: the manager's ephemeral AWS credentials →
- * STS `GetWebIdentityToken` (a ≤300s OIDC JWT whose `sub` is the role ARN) →
- * the OpenAI SDK's `workloadIdentity` option exchanges it internally and
- * re-invokes the provider whenever it needs a fresh token. No API key exists
- * anywhere in the chain.
+ * One keyed mint returns the openai bundle: a short-lived identity token the
+ * service signed — its issuer the service, its audience the one OpenAI's
+ * workload identity provider is registered with, the grant key as a claim
+ * the provider's mapping matches — plus the identity-provider and
+ * service-account ids. The OpenAI SDK's `workloadIdentity` option exchanges
+ * the token internally and re-invokes the provider whenever its access token
+ * needs renewal; a fresh token is a fresh mint. No API key and no cloud
+ * credential exists anywhere in the chain.
  *
- * Under the **key contract** the page names only itself: one call to
- * {@link createBrokeredOpenAI} with `{ base, key }` fetches the openai
- * bundle — the STS envelope plus region, audience, identity-provider id and
- * service-account id, minted together — and returns a ready client. No
- * federation id is baked into site code.
- *
- * Prerequisites (once, server/infra-side): outbound web identity federation
- * enabled on the AWS account, `sts:GetWebIdentityToken` allowed on the role,
- * and an OpenAI workload identity provider + service-account mapping pinned
- * to the role ARN.
+ * Through 0.5 this package rode AWS: the bundle was an STS envelope and the
+ * page minted a `GetWebIdentityToken` JWT itself through the AWS SDK. That
+ * leg, the role per grant behind it and the `@aws-sdk/client-sts` peer are
+ * gone; a service still answering the envelope shape needs 0.5.
  *
  * @packageDocumentation
  */
 
-import { GetWebIdentityTokenCommand, STSClient } from "@aws-sdk/client-sts";
 import {
   type BrokerRouteOptions,
   type CredentialFetchOptions,
   CredentialManager,
   type CredentialTarget,
   credentialsUrl,
+  type EphemeralCredential,
 } from "@habemus-papadum/cf-browser-credentials";
-import type { AwsCredentials } from "@habemus-papadum/cf-creds-aws";
 import OpenAI from "openai";
-
-/** The audience OpenAI's workload identity provider is registered with. */
-const DEFAULT_AUDIENCE = "https://api.openai.com/v1";
-
-export interface SubjectTokenOptions {
-  manager: CredentialManager<AwsCredentials>;
-  /** STS region — GetWebIdentityToken exists only on regional endpoints. */
-  region: string;
-  /** Must match the audience configured on the OpenAI identity provider. */
-  audience?: string;
-  /** JWT lifetime; it only needs to survive one exchange round-trip. */
-  durationSeconds?: number;
-}
 
 /** The shape the OpenAI SDK expects from `workloadIdentity.provider`. */
 export interface SubjectTokenProvider {
@@ -51,84 +35,21 @@ export interface SubjectTokenProvider {
   getToken: () => Promise<string>;
 }
 
-/**
- * A provider minting a fresh OIDC JWT on demand from whatever credentials
- * the manager currently holds — composing the two refresh cycles: the
- * manager keeps AWS credentials fresh, the SDK re-invokes this whenever its
- * exchanged access token needs renewal.
- */
-export function awsSubjectTokenProvider(options: SubjectTokenOptions): SubjectTokenProvider {
-  const { manager, region, audience = DEFAULT_AUDIENCE, durationSeconds = 300 } = options;
-  return {
-    tokenType: "jwt",
-    getToken: async () => {
-      const creds = await manager.get();
-      const sts = new STSClient({
-        region,
-        credentials: {
-          accessKeyId: creds.accessKeyId,
-          secretAccessKey: creds.secretAccessKey,
-          sessionToken: creds.sessionToken,
-        },
-      });
-      const { WebIdentityToken } = await sts.send(
-        new GetWebIdentityTokenCommand({
-          Audience: [audience],
-          SigningAlgorithm: "ES384",
-          DurationSeconds: durationSeconds,
-        }),
-      );
-      if (!WebIdentityToken) throw new Error("STS returned no web identity token");
-      return WebIdentityToken;
-    },
-  };
-}
-
-export interface FederatedOpenAIOptions extends SubjectTokenOptions {
-  /** From the OpenAI dashboard's provider registration (idp_…). */
-  identityProviderId: string;
-  /** From the OpenAI service account (user-…). */
-  serviceAccountId: string;
-}
-
-/**
- * An OpenAI client authenticated purely by federation. Browser notes baked
- * in: `dangerouslyAllowBrowser` is required by the SDK in browsers even
- * though there is no key to expose here, and the SDK's exchange helper calls
- * its stored fetch method-style — which browsers reject unless rebound — so
- * a binding-preserving fetch wrapper is supplied.
- *
- * @deprecated Every id here now comes from the broker. Use
- * {@link createBrokeredOpenAI}, which names only the site's own key.
- */
-export function createFederatedOpenAI(options: FederatedOpenAIOptions): OpenAI {
-  return federatedClient(options);
-}
-
-function federatedClient(options: FederatedOpenAIOptions): OpenAI {
-  const { identityProviderId, serviceAccountId, ...subject } = options;
-  return new OpenAI({
-    dangerouslyAllowBrowser: true,
-    fetch: (...args: Parameters<typeof globalThis.fetch>) => globalThis.fetch(...args),
-    workloadIdentity: {
-      identityProviderId,
-      serviceAccountId,
-      provider: awsSubjectTokenProvider(subject),
-    },
-  });
-}
-
 /** The conventional broker route for the OpenAI federation bundle. */
 export const OPENAI_CREDENTIALS_PATH = "/api/credentials/openai";
 
 /**
- * The whole bundle one openai mint returns: the STS envelope plus the
- * federation config both legs of the chain need. Everything a page would
+ * The whole bundle one openai mint returns: the subject token and the
+ * federation config the SDK's exchange names. Everything a page would
  * otherwise hard-code lives here instead.
  */
-export interface OpenAICredentials extends AwsCredentials {
-  /** STS region for the GetWebIdentityToken leg. */
-  region: string;
+export interface OpenAICredentials extends EphemeralCredential {
+  /**
+   * The identity token the service signed: issuer the service, audience the
+   * provider's, the grant key as a claim. Lives minutes; `expiration` is its
+   * `exp`.
+   */
+  identityToken: string;
   /** Audience the OpenAI identity provider is registered with. */
   audience: string;
   /** OpenAI provider registration (idp_…). */
@@ -137,9 +58,27 @@ export interface OpenAICredentials extends AwsCredentials {
   serviceAccountId: string;
 }
 
+/** Tokens live minutes: refresh this close to the end, not the manager's ten-minute default. */
+const DEFAULT_REFRESH_MARGIN_MS = 30_000;
+
+/**
+ * A provider handing the SDK the current token, minting afresh only when
+ * the cached one is near its end. The SDK asks when its exchanged access
+ * token needs renewal, so a mint happens per access-token lifetime, never
+ * per request.
+ */
+export function brokeredSubjectTokenProvider(
+  manager: CredentialManager<OpenAICredentials>,
+): SubjectTokenProvider {
+  return {
+    tokenType: "jwt",
+    getToken: async () => (await manager.get()).identityToken,
+  };
+}
+
 /**
  * The endpoint URL at a well-known credentials service for a site's key,
- * e.g. `openaiCredentialsUrl("https://creds.example.com", { key: "scratch" })`.
+ * e.g. `openaiCredentialsUrl("https://creds.example.com", { key: "research" })`.
  */
 export function openaiCredentialsUrl(base: string, target: CredentialTarget = {}): string {
   return credentialsUrl(OPENAI_CREDENTIALS_PATH, { base, ...target });
@@ -148,18 +87,23 @@ export function openaiCredentialsUrl(base: string, target: CredentialTarget = {}
 export interface BrokeredOpenAIOptions extends BrokerRouteOptions, CredentialFetchOptions {
   /** Full endpoint URL; overrides `base`/`key`. Defaults to {@link OPENAI_CREDENTIALS_PATH}, same-origin. */
   url?: string;
+  /** Refresh the token this close to its expiry (default 30 s). */
   refreshMarginMs?: number;
-  /** JWT lifetime for the STS leg; it only needs to survive one exchange. */
-  durationSeconds?: number;
 }
 
-/** A manager typed to the openai bundle, defaulting to the conventional route. */
+/**
+ * A manager typed to the openai bundle, defaulting to the conventional
+ * route. It fetches on demand only: the SDK asks when its access token
+ * needs renewal, and a background timer on a minutes-long token would mint
+ * all day.
+ */
 export function createOpenAICredentialManager(
   options: BrokeredOpenAIOptions = {},
 ): CredentialManager<OpenAICredentials> {
   return new CredentialManager<OpenAICredentials>({
     url: credentialsUrl(OPENAI_CREDENTIALS_PATH, options),
-    refreshMarginMs: options.refreshMarginMs,
+    refreshMarginMs: options.refreshMarginMs ?? DEFAULT_REFRESH_MARGIN_MS,
+    autoRefresh: false,
     bounce: options.bounce,
     loginUrl: options.loginUrl,
   });
@@ -174,14 +118,18 @@ export interface BrokeredOpenAI {
 
 /**
  * A federated OpenAI client built from nothing but the site's own key. The
- * broker's ids are only known once the bundle has been fetched, so this is
- * async — the first mint happens here, and the manager keeps it fresh
- * afterwards.
+ * service's ids are only known once the bundle has been fetched, so this is
+ * async — the first mint happens here, and the manager mints again whenever
+ * the SDK needs a fresh token. Browser notes baked in: `dangerouslyAllowBrowser`
+ * is required by the SDK in browsers even though there is no key to expose
+ * here, and the SDK's exchange helper calls its stored fetch method-style —
+ * which browsers reject unless rebound — so a binding-preserving fetch
+ * wrapper is supplied.
  *
  * ```ts
  * const { client, manager } = await createBrokeredOpenAI({
  *   base: "https://creds.example.com",
- *   key: "scratch",
+ *   key: "research",
  * });
  * manager.onRotate((creds) => show(creds.expiration));
  * const res = await client.responses.create({ model: "gpt-4o-mini", input: "hi" });
@@ -194,13 +142,14 @@ export async function createBrokeredOpenAI(
   // The first mint resolves the federation config; rotations keep the same
   // grant, so the ids are read once and the manager carries the rest.
   const bundle = await manager.get();
-  const client = federatedClient({
-    manager,
-    region: bundle.region,
-    audience: bundle.audience,
-    durationSeconds: options.durationSeconds,
-    identityProviderId: bundle.identityProviderId,
-    serviceAccountId: bundle.serviceAccountId,
+  const client = new OpenAI({
+    dangerouslyAllowBrowser: true,
+    fetch: (...args: Parameters<typeof globalThis.fetch>) => globalThis.fetch(...args),
+    workloadIdentity: {
+      identityProviderId: bundle.identityProviderId,
+      serviceAccountId: bundle.serviceAccountId,
+      provider: brokeredSubjectTokenProvider(manager),
+    },
   });
   return { client, manager };
 }

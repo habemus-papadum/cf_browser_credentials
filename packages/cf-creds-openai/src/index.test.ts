@@ -1,26 +1,4 @@
-import type { CredentialManager } from "@habemus-papadum/cf-browser-credentials";
-import type { AwsCredentials } from "@habemus-papadum/cf-creds-aws";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-vi.mock("@aws-sdk/client-sts", () => {
-  class STSClient {
-    config: unknown;
-    constructor(config: unknown) {
-      this.config = config;
-    }
-    async send(command: { input: unknown }) {
-      sent.push({ config: this.config, input: command.input });
-      return { WebIdentityToken: "header.payload.signature" };
-    }
-  }
-  class GetWebIdentityTokenCommand {
-    input: unknown;
-    constructor(input: unknown) {
-      this.input = input;
-    }
-  }
-  return { STSClient, GetWebIdentityTokenCommand };
-});
 
 vi.mock("openai", () => {
   class OpenAI {
@@ -33,101 +11,108 @@ vi.mock("openai", () => {
   return { default: OpenAI };
 });
 
-const sent: { config: unknown; input: unknown }[] = [];
 const constructed: Record<string, unknown>[] = [];
 
-const manager = {
-  get: async () => ({
-    accessKeyId: "AKID",
-    secretAccessKey: "secret",
-    sessionToken: "tok",
-    expiration: new Date(Date.now() + 3_600_000).toISOString(),
-  }),
-} as unknown as CredentialManager<AwsCredentials>;
+const expiresIn = (ms: number) => new Date(Date.now() + ms).toISOString();
 
-describe("awsSubjectTokenProvider", () => {
-  it("mints a JWT with the manager's current credentials and sane defaults", async () => {
-    const { awsSubjectTokenProvider } = await import("./index.js");
-    const provider = awsSubjectTokenProvider({ manager, region: "us-east-1" });
-
-    expect(provider.tokenType).toBe("jwt");
-    expect(await provider.getToken()).toBe("header.payload.signature");
-    expect(sent[0].input).toEqual({
-      Audience: ["https://api.openai.com/v1"],
-      SigningAlgorithm: "ES384",
-      DurationSeconds: 300,
-    });
-  });
-});
-
-// The bundle one keyed openai mint returns: the STS envelope plus every
-// federation id the two client-side legs need.
-const BUNDLE = {
-  accessKeyId: "AKID",
-  secretAccessKey: "secret",
-  sessionToken: "tok",
-  expiration: new Date(Date.now() + 3_600_000).toISOString(),
-  region: "eu-west-2",
+// The bundle one keyed openai mint returns: the service-signed subject token
+// plus the ids the SDK's exchange names.
+const bundle = (overrides: Record<string, unknown> = {}) => ({
+  identityToken: "header.payload.signature",
+  expiration: expiresIn(300_000),
   audience: "https://api.openai.com/v1",
   identityProviderId: "idp_from_broker",
   serviceAccountId: "user-from-broker",
+  ...overrides,
+});
+
+type Constructed = {
+  workloadIdentity: {
+    identityProviderId: string;
+    serviceAccountId: string;
+    provider: { tokenType: string; getToken: () => Promise<string> };
+  };
 };
 
 describe("createBrokeredOpenAI", () => {
   beforeEach(() => {
-    sent.length = 0;
     constructed.length = 0;
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
 
   it("builds a client from nothing but the site's own key", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify(BUNDLE), { status: 200 }));
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(bundle()), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const { createBrokeredOpenAI } = await import("./index.js");
 
-    const { client, manager: brokered } = await createBrokeredOpenAI({
+    const { client, manager } = await createBrokeredOpenAI({
       base: "https://creds.example.com",
-      key: "scratch",
+      key: "research",
     });
 
     expect(fetchMock.mock.calls[0][0]).toBe(
-      "https://creds.example.com/api/credentials/openai?key=scratch",
+      "https://creds.example.com/api/credentials/openai?key=research",
     );
     // Every id the SDK is configured with came off the wire, not from here.
-    const { workloadIdentity } = constructed[0] as {
-      workloadIdentity: { identityProviderId: string; serviceAccountId: string };
-    };
+    const { workloadIdentity } = constructed[0] as Constructed;
     expect(workloadIdentity.identityProviderId).toBe("idp_from_broker");
     expect(workloadIdentity.serviceAccountId).toBe("user-from-broker");
+    expect(workloadIdentity.provider.tokenType).toBe("jwt");
     expect(client).toBeDefined();
     // The manager comes back typed to the bundle, for onRotate and refresh.
-    expect((await brokered.get()).serviceAccountId).toBe("user-from-broker");
+    expect((await manager.get()).serviceAccountId).toBe("user-from-broker");
   });
 
-  it("takes the STS leg's region and audience from the envelope", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ ...BUNDLE, audience: "https://audience.example" }), {
-            status: 200,
-          }),
-      ),
-    );
+  it("hands the SDK the minted token, and the same one while it is fresh", async () => {
+    let n = 0;
+    const fetchMock = vi.fn(async () => {
+      n += 1;
+      return new Response(JSON.stringify(bundle({ identityToken: `token-${n}` })), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
     const { createBrokeredOpenAI } = await import("./index.js");
 
-    await createBrokeredOpenAI({ base: "https://creds.example.com", key: "scratch" });
-    const { workloadIdentity } = constructed[0] as {
-      workloadIdentity: { provider: { getToken: () => Promise<string> } };
-    };
-    await workloadIdentity.provider.getToken();
+    await createBrokeredOpenAI({ base: "https://creds.example.com", key: "research" });
+    const { workloadIdentity } = constructed[0] as Constructed;
 
-    expect(sent[0].config).toMatchObject({ region: "eu-west-2" });
-    expect(sent[0].input).toEqual({
-      Audience: ["https://audience.example"],
-      SigningAlgorithm: "ES384",
-      DurationSeconds: 300,
+    expect(await workloadIdentity.provider.getToken()).toBe("token-1");
+    expect(await workloadIdentity.provider.getToken()).toBe("token-1");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("mints afresh when the cached token is near its end", async () => {
+    let n = 0;
+    const fetchMock = vi.fn(async () => {
+      n += 1;
+      // The first token has seconds left — inside the 30 s margin.
+      const expiration = expiresIn(n === 1 ? 10_000 : 300_000);
+      return new Response(JSON.stringify(bundle({ identityToken: `token-${n}`, expiration })), {
+        status: 200,
+      });
     });
+    vi.stubGlobal("fetch", fetchMock);
+    const { createBrokeredOpenAI } = await import("./index.js");
+
+    await createBrokeredOpenAI({ base: "https://creds.example.com", key: "research" });
+    const { workloadIdentity } = constructed[0] as Constructed;
+
+    expect(await workloadIdentity.provider.getToken()).toBe("token-2");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("schedules no background refresh — the SDK asks when it needs one", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(bundle()), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { createBrokeredOpenAI } = await import("./index.js");
+
+    await createBrokeredOpenAI({ base: "https://creds.example.com", key: "research" });
+    await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("surfaces the broker's 400 when no key is sent", async () => {
@@ -162,7 +147,7 @@ describe("createBrokeredOpenAI", () => {
   it("refuses a key and a legacy role together", async () => {
     const { createBrokeredOpenAI } = await import("./index.js");
     await expect(
-      createBrokeredOpenAI({ base: "https://creds.example.com", key: "scratch", role: "smoke" }),
+      createBrokeredOpenAI({ base: "https://creds.example.com", key: "research", role: "smoke" }),
     ).rejects.toThrow(/mutually exclusive/);
   });
 });
@@ -170,8 +155,8 @@ describe("createBrokeredOpenAI", () => {
 describe("openaiCredentialsUrl", () => {
   it("names the site, not the grant", async () => {
     const { openaiCredentialsUrl } = await import("./index.js");
-    expect(openaiCredentialsUrl("https://creds.example.com", { key: "scratch" })).toBe(
-      "https://creds.example.com/api/credentials/openai?key=scratch",
+    expect(openaiCredentialsUrl("https://creds.example.com", { key: "research" })).toBe(
+      "https://creds.example.com/api/credentials/openai?key=research",
     );
   });
 });

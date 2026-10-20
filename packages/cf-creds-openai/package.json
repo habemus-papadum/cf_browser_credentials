@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/cf-creds-openai",
   "version": "0.5.1+dev",
-  "description": "Keyless OpenAI in the browser via AWS workload identity federation: mint GetWebIdentityToken JWTs from ephemeral credentials, exchange handled by the OpenAI SDK",
+  "description": "Keyless OpenAI in the browser: a credentials service's own OIDC token, exchanged by the OpenAI SDK's workload identity federation",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -32,15 +32,12 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@habemus-papadum/cf-browser-credentials": "workspace:^",
-    "@habemus-papadum/cf-creds-aws": "workspace:^"
+    "@habemus-papadum/cf-browser-credentials": "workspace:^"
   },
   "devDependencies": {
-    "@aws-sdk/client-sts": "^3.1104.0",
     "openai": "^7.4.0"
   },
   "peerDependencies": {
-    "@aws-sdk/client-sts": "^3.1104.0",
     "openai": "^7.4.0"
   }
 }

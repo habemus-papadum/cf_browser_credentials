@@ -208,6 +208,12 @@ export interface CredentialManagerOptions extends CredentialFetchOptions {
   url: string;
   /** Refresh this long before expiration. */
   refreshMarginMs?: number;
+  /**
+   * Keep a background refresh scheduled ahead of expiration (the default).
+   * Off, the manager fetches only when asked — for a token that lives
+   * minutes and is consumed on demand, where a timer would mint all day.
+   */
+  autoRefresh?: boolean;
 }
 
 type Listener<C> = (creds: C) => void;
@@ -215,6 +221,7 @@ type Listener<C> = (creds: C) => void;
 export class CredentialManager<C extends EphemeralCredential = EphemeralCredential> {
   #url: string;
   #margin: number;
+  #autoRefresh: boolean;
   #fetchOptions: CredentialFetchOptions;
   #creds: C | null = null;
   #inflight: Promise<C> | null = null;
@@ -224,6 +231,7 @@ export class CredentialManager<C extends EphemeralCredential = EphemeralCredenti
   constructor(options: CredentialManagerOptions) {
     this.#url = options.url;
     this.#margin = options.refreshMarginMs ?? 10 * 60 * 1000;
+    this.#autoRefresh = options.autoRefresh ?? true;
     this.#fetchOptions = { bounce: options.bounce, loginUrl: options.loginUrl };
   }
 
@@ -257,10 +265,12 @@ export class CredentialManager<C extends EphemeralCredential = EphemeralCredenti
     this.#creds = creds;
     for (const fn of this.#listeners) fn(creds);
     clearTimeout(this.#timer);
-    const delay = Math.max(60_000, Date.parse(creds.expiration) - Date.now() - this.#margin);
-    this.#timer = setTimeout(() => {
-      this.refresh().catch((err) => console.error("credential refresh failed", err));
-    }, delay);
+    if (this.#autoRefresh) {
+      const delay = Math.max(60_000, Date.parse(creds.expiration) - Date.now() - this.#margin);
+      this.#timer = setTimeout(() => {
+        this.refresh().catch((err) => console.error("credential refresh failed", err));
+      }, delay);
+    }
     return creds;
   }
 }
