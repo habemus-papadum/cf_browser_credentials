@@ -75,9 +75,9 @@ describe("createSignedFetch", () => {
 describe("createAwsCredentialManager", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("builds the well-known service URL from base and key", () => {
-    expect(awsCredentialsUrl("https://creds.example.com", { key: "scratch" })).toBe(
-      "https://creds.example.com/api/credentials/aws?key=scratch",
+  it("builds the well-known service URL from base and grantPath", () => {
+    expect(awsCredentialsUrl("https://creds.example.com", { grantPath: "scratch" })).toBe(
+      "https://creds.example.com/api/credentials/aws?grant_path=scratch",
     );
   });
 
@@ -90,26 +90,23 @@ describe("createAwsCredentialManager", () => {
     );
   });
 
-  it("accepts a target without base — the key rides the same-origin route", () => {
-    // The broker's key contract has no default bundle: same origin says
-    // where the broker lives, never which grant is meant. This package once
-    // refused key-without-base; that collided live with a lane minter's 400
-    // on the keyless route (2026-08-24).
-    expect(() => createAwsCredentialManager({ key: "scratch" })).not.toThrow();
+  it("accepts a target without base — the grant path is sent on the same-origin route", () => {
+    // A same-origin request still needs an explicit grant selection.
+    expect(() => createAwsCredentialManager({ grantPath: "scratch" })).not.toThrow();
     expect(() => createAwsCredentialManager({ role: "smoke" })).not.toThrow();
   });
 
-  it("throws when key and role are given together", () => {
+  it("throws when grantPath and role are given together", () => {
     expect(() =>
       createAwsCredentialManager({
         base: "https://creds.example.com",
-        key: "scratch",
+        grantPath: "scratch",
         role: "smoke",
       }),
     ).toThrow(/mutually exclusive/);
   });
 
-  it("fetches the keyed route, region included", async () => {
+  it("fetches the grant route, region included", async () => {
     const fetchMock = vi.fn(
       async () =>
         new Response(
@@ -127,27 +124,27 @@ describe("createAwsCredentialManager", () => {
 
     const creds = await createAwsCredentialManager({
       base: "https://creds.example.com",
-      key: "scratch",
+      grantPath: "scratch",
     }).get();
 
     expect(fetchMock.mock.calls[0][0]).toBe(
-      "https://creds.example.com/api/credentials/aws?key=scratch",
+      "https://creds.example.com/api/credentials/aws?grant_path=scratch",
     );
     expect(creds.region).toBe("us-east-1");
   });
 
-  it("surfaces the broker's refusal of an unknown key", async () => {
+  it("surfaces the broker's refusal of an unknown grant path", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(
         async () =>
-          new Response(JSON.stringify({ error: "no aws grant for key: nope" }), { status: 404 }),
+          new Response(JSON.stringify({ error: "no aws grant for path: nope" }), { status: 404 }),
       ),
     );
 
     await expect(
-      createAwsCredentialManager({ base: "https://creds.example.com", key: "nope" }).get(),
-    ).rejects.toThrow(/404.*no aws grant for key: nope/s);
+      createAwsCredentialManager({ base: "https://creds.example.com", grantPath: "nope" }).get(),
+    ).rejects.toThrow(/404.*no aws grant for path: nope/s);
   });
 });
 

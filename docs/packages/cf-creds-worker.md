@@ -1,25 +1,20 @@
 # @habemus-papadum/cf-creds-worker
 
-Server-side mint kit for a credential-broker worker: STS `AssumeRole` over
+Credential service helpers for a credential-broker worker: STS `AssumeRole` over
 plain fetch (via aws4fetch), Cloudflare Access identity verification, a
-pluggable mint policy, and a structured mint log. Runtime-agnostic — workerd
+pluggable credential policy, and a structured request log. Runtime-agnostic — workerd
 and Node alike.
 
 This is a kit, not a framework: routes, env names, and policy are deployment
 configuration, so the worker itself stays a small composition root that each
 deployment owns.
 
-The posture is **attribution before authorization**. The worker verifies the
-Access JWT on every request — signature against the team's published keys,
-not mere header presence — and threads the verified identity (a user's
-email, or a service token's client id) through the mint policy, into the
-mint log, and into the credential itself: the AWS `RoleSessionName` *is* the
-identity, so every API call made with the minted credentials attributes to a
-person in CloudTrail. The shipped policy is `allowAll` — anyone Access
-admits gets the standard grant, preserving the high-trust default.
-Restricting or shaping per identity (a scoped-down role for an agent's
-service token, a shorter TTL) is a policy you write the day a lane needs
-one, not ceremony installed in advance.
+The worker verifies the Access JWT signature against the team's published
+signing keys. It passes the verified identity to the credential policy and
+records it in request logs. AWS session names include the identity for
+CloudTrail attribution. `allowAll()` returns the deployment's standard grant
+for every authenticated caller. Supply another policy when callers need
+different permissions, roles, or token lifetimes.
 
 The canonical composition, for a broker behind Cloudflare Access:
 
@@ -29,7 +24,7 @@ import {
   type AccessIdentity,
   allowAll,
   assumeRole,
-  logMint,
+  logCredentialRequest,
   sessionNameFor,
   verifyAccessIdentity,
 } from "@habemus-papadum/cf-creds-worker";
@@ -54,8 +49,7 @@ export default {
       return Response.json({ error: "not found" }, { status: 404, headers });
     }
 
-    // Access already gated the hostname; verifying its JWT keeps the gate
-    // honest against misconfiguration and names the caller.
+    // Verify the Access JWT and identify the caller.
     let identity: AccessIdentity;
     try {
       identity = await verifyAccessIdentity(request, {
@@ -63,7 +57,7 @@ export default {
         audience: env.ACCESS_APP_AUD,
       });
     } catch (err) {
-      logMint({ provider: "aws", outcome: "denied", identity: null, reason: String(err), request });
+      logCredentialRequest({ provider: "aws", outcome: "denied", identity: null, reason: String(err), request });
       return new Response("no valid Cloudflare Access identity", { status: 401, headers });
     }
 
@@ -74,7 +68,7 @@ export default {
     });
     const decision = await policy({ identity, provider: "aws", request });
     if (!decision.allow) {
-      logMint({ provider: "aws", outcome: "denied", identity, reason: decision.reason, request });
+      logCredentialRequest({ provider: "aws", outcome: "denied", identity, reason: decision.reason, request });
       return Response.json({ error: decision.reason }, { status: decision.status ?? 403, headers });
     }
 
@@ -84,7 +78,7 @@ export default {
       decision.grant.durationSeconds,
       { sessionName: sessionNameFor(identity) }, // CloudTrail attribution
     );
-    logMint({
+    logCredentialRequest({
       provider: "aws",
       outcome: "allowed",
       identity,
@@ -97,7 +91,7 @@ export default {
 };
 ```
 
-Deployment notes that keep the gate honest: disable `workers_dev` and
+Deployment settings: disable `workers_dev` and
 `preview_urls` (anything reachable off-route bypasses Access), and scope the
 worker's route to the credential path only so it stays a pure broker.
 `ACCESS_TEAM_DOMAIN` is the Zero Trust team domain the JWT's issuer and
@@ -105,8 +99,8 @@ JWKS are derived from; `ACCESS_APP_AUD` (recommended) additionally pins the
 JWT to this Access app's AUD tag. The team's signing keys are cached in the
 isolate and refreshed on rotation.
 
-To land mint events in Cloudflare's logging infrastructure, enable Workers
-Logs in the worker's wrangler config — `logMint` emits one JSON line per
+To land credential request events in Cloudflare's logging infrastructure, enable Workers
+Logs in the worker's wrangler config — `logCredentialRequest` emits one JSON line per
 attempt (allowed and denied alike), and Workers Logs indexes the fields for
 query; Logpush is the incremental step if retention beyond days is needed:
 
@@ -124,8 +118,13 @@ its own envelope, and the one contract every envelope must honour is an
 schedules refresh against. A vendor-key provider (ElevenLabs, MotherDuck) is a
 route that calls the vendor's token API with a wrangler-secret key
 and returns `{ …vendorFields, expiration }` — for MotherDuck, a read-scaling
-token of the service account the key's grant names, named after the visitor's
+token of the service account the selected grant names, named after the visitor's
 identity plus the mint time (a name is required, and unique among the
 account's live tokens). Give every route the same
-treatment: verify once, consult the policy under its provider key, log the
+treatment: verify once, consult the policy under its provider name, log the
 outcome.
+
+The canonical policy types are `CredentialContext`, `CredentialDecision`, and
+`CredentialPolicy`. Logging uses `credentialRequestLogRecord()` or
+`logCredentialRequest()`, with event type `credential_request`. The prior
+`Mint*` types, `mintLogRecord`, and `logMint` remain deprecated aliases.

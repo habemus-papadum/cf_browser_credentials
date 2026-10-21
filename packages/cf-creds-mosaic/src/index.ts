@@ -9,7 +9,7 @@
  * (current duckdb-wasm builds reject the former); the resolved mode is
  * reported through `onInstall`.
  *
- * The region installs alongside the keys: under the key contract it rides in
+ * The region installs alongside the keys: under the grant path contract it rides in
  * the envelope, so a keyed page passes no region at all and each install
  * takes the one belonging to the credentials it is installing.
  *
@@ -24,7 +24,7 @@ export type InstallMode = "CREATE SECRET" | "SET s3_*";
 
 export interface CredentialAwareOptions {
   /**
-   * Region to install. Optional when the envelope carries one (the key
+   * Region to install. Optional when the envelope carries one (the grant path
    * contract): each install then takes the region from the credentials it is
    * installing, and an explicit value here still wins.
    */

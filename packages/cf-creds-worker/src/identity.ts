@@ -6,7 +6,7 @@
  * detecting the header, as the original tripwire did — hardens the gate
  * against route misconfiguration and, more importantly, yields the caller's
  * identity: the email of a logged-in user, or the client id of a service
- * token on a headless lane. Identity is recorded on every mint; whether it
+ * token on a machine request. Identity is recorded on every credential request; whether it
  * *restricts* anything is the policy's business (see policy.ts).
  *
  * @packageDocumentation

@@ -16,7 +16,7 @@ import { credentialAwareConnector } from "@habemus-papadum/cf-creds-mosaic";
 
 const manager = createAwsCredentialManager({
   base: "https://creds.example.com",
-  key: "scratch", // this site's own name at the service
+  grantPath: "scratch", // this site's own name at the service
 });
 const base = new DuckDBWASMConnector({ duckdb: db, connection });
 const connector = credentialAwareConnector(base, manager, {
@@ -25,7 +25,7 @@ const connector = credentialAwareConnector(base, manager, {
 coordinator().databaseConnector(connector);
 ```
 
-The region installs alongside the keys. Under the key contract it rides in
+The region installs alongside the keys. Under the grant path contract it rides in
 the envelope, so nothing above names one; each install takes the region
 belonging to the credentials it is installing, which keeps a rotation that
 moves buckets honest. Pass `options.region` when the broker returns none (an
@@ -36,7 +36,7 @@ Install prefers `CREATE OR REPLACE SECRET` and falls back to `SET s3_*`
 (current duckdb-wasm builds reject the former); `onInstall` reports which
 mode resolved. `forceRefresh` exists for rotation torture-testing.
 
-The pre-key-contract signature — `credentialAwareConnector(base, manager,
+The pre-grant-path signature — `credentialAwareConnector(base, manager,
 "us-east-1", options)`, with the region as a third positional — still works
 and is deprecated; move that value to `options.region`, or drop it.
 

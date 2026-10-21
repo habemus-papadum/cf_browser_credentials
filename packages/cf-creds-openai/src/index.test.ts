@@ -43,18 +43,18 @@ describe("createBrokeredOpenAI", () => {
     vi.useRealTimers();
   });
 
-  it("builds a client from nothing but the site's own key", async () => {
+  it("builds a client from nothing but the site's grant path", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify(bundle()), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const { createBrokeredOpenAI } = await import("./index.js");
 
     const { client, manager } = await createBrokeredOpenAI({
       base: "https://creds.example.com",
-      key: "research",
+      grantPath: "research",
     });
 
     expect(fetchMock.mock.calls[0][0]).toBe(
-      "https://creds.example.com/api/credentials/openai?key=research",
+      "https://creds.example.com/api/credentials/openai?grant_path=research",
     );
     // Every id the SDK is configured with came off the wire, not from here.
     const { workloadIdentity } = constructed[0] as Constructed;
@@ -75,7 +75,7 @@ describe("createBrokeredOpenAI", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { createBrokeredOpenAI } = await import("./index.js");
 
-    await createBrokeredOpenAI({ base: "https://creds.example.com", key: "research" });
+    await createBrokeredOpenAI({ base: "https://creds.example.com", grantPath: "research" });
     const { workloadIdentity } = constructed[0] as Constructed;
 
     expect(await workloadIdentity.provider.getToken()).toBe("token-1");
@@ -96,7 +96,7 @@ describe("createBrokeredOpenAI", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { createBrokeredOpenAI } = await import("./index.js");
 
-    await createBrokeredOpenAI({ base: "https://creds.example.com", key: "research" });
+    await createBrokeredOpenAI({ base: "https://creds.example.com", grantPath: "research" });
     const { workloadIdentity } = constructed[0] as Constructed;
 
     expect(await workloadIdentity.provider.getToken()).toBe("token-2");
@@ -109,30 +109,32 @@ describe("createBrokeredOpenAI", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { createBrokeredOpenAI } = await import("./index.js");
 
-    await createBrokeredOpenAI({ base: "https://creds.example.com", key: "research" });
+    await createBrokeredOpenAI({ base: "https://creds.example.com", grantPath: "research" });
     await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("surfaces the broker's 400 when no key is sent", async () => {
+  it("surfaces the broker's 400 when no grant path is sent", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response(JSON.stringify({ error: "key required" }), { status: 400 })),
+      vi.fn(
+        async () => new Response(JSON.stringify({ error: "grant path required" }), { status: 400 }),
+      ),
     );
     const { createBrokeredOpenAI } = await import("./index.js");
 
     await expect(createBrokeredOpenAI({ url: "/api/credentials/openai" })).rejects.toThrow(
-      /400.*key required/s,
+      /400.*grant path required/s,
     );
   });
 
-  it("surfaces the broker's 404 for a key with no openai grant", async () => {
+  it("surfaces the broker's 404 for a grant path with no openai grant", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(
         async () =>
-          new Response(JSON.stringify({ error: "no openai grant for key: artifacts" }), {
+          new Response(JSON.stringify({ error: "no openai grant for path: artifacts" }), {
             status: 404,
           }),
       ),
@@ -140,14 +142,18 @@ describe("createBrokeredOpenAI", () => {
     const { createBrokeredOpenAI } = await import("./index.js");
 
     await expect(
-      createBrokeredOpenAI({ base: "https://creds.example.com", key: "artifacts" }),
-    ).rejects.toThrow(/404.*no openai grant for key: artifacts/s);
+      createBrokeredOpenAI({ base: "https://creds.example.com", grantPath: "artifacts" }),
+    ).rejects.toThrow(/404.*no openai grant for path: artifacts/s);
   });
 
-  it("refuses a key and a legacy role together", async () => {
+  it("refuses a grant path and a legacy role together", async () => {
     const { createBrokeredOpenAI } = await import("./index.js");
     await expect(
-      createBrokeredOpenAI({ base: "https://creds.example.com", key: "research", role: "smoke" }),
+      createBrokeredOpenAI({
+        base: "https://creds.example.com",
+        grantPath: "research",
+        role: "smoke",
+      }),
     ).rejects.toThrow(/mutually exclusive/);
   });
 });
@@ -155,8 +161,8 @@ describe("createBrokeredOpenAI", () => {
 describe("openaiCredentialsUrl", () => {
   it("names the site, not the grant", async () => {
     const { openaiCredentialsUrl } = await import("./index.js");
-    expect(openaiCredentialsUrl("https://creds.example.com", { key: "research" })).toBe(
-      "https://creds.example.com/api/credentials/openai?key=research",
+    expect(openaiCredentialsUrl("https://creds.example.com", { grantPath: "research" })).toBe(
+      "https://creds.example.com/api/credentials/openai?grant_path=research",
     );
   });
 });

@@ -20,7 +20,7 @@ import { credentialAwareConnector } from "@habemus-papadum/cf-creds-mosaic";
 // The page names only itself; the region arrives with the credentials.
 const manager = createAwsCredentialManager({
   base: "https://creds.example.com",
-  key: "scratch",
+  grantPath: "scratch",
 });
 
 // Wrap Mosaic's connector; the credential check now guards ALL queries.
@@ -66,7 +66,7 @@ document.querySelector("#app")!.append(
   credentials being installed — so a rotation that moves buckets stays
   honest. `options.region` overrides it for a broker that returns none (an
   older route, or a bucket elsewhere); with neither, the install fails loudly
-  rather than signing for the wrong region. The pre-key-contract signature
+  rather than signing for the wrong region. The pre-grant-path signature
   `credentialAwareConnector(base, manager, "us-east-1", options)` still works
   and is deprecated.
 - **Traffic reality** (duckdb-wasm ≤ 1.33): the S3 layer downloads whole

@@ -34,46 +34,46 @@ federated exchanges, single-use tokens. The worker is never on the data path.
   (with your IdP) fronts the hostname and forwards a signed JWT on every
   request; the worker verifies that signature against the team's published
   keys and extracts the caller's identity — a user's email, or a service
-  token's client id for headless lanes. The posture is **attribution before
+  token's client id for machine requests. The posture is **attribution before
   authorization**: every mint is logged and stamped with the identity that
   asked (the AWS session name lands in CloudTrail on every subsequent
   call), while the shipped policy still admits everyone Access admits —
   the high-trust, low-friction default for a small unit that trusts
   itself. Differentiating per identity — a scoped-down role for an agent,
-  a shorter TTL, a denied lane — is a pluggable mint policy, not a
+  a shorter TTL, a denied request — is a pluggable credential policy, not a
   rewrite. Verification also hardens the old presence-only tripwire: a
   misconfigured route can no longer be satisfied by a fabricated header.
 - **Providers are routes.** `/api/credentials/aws` returns STS role
   credentials; `/api/credentials/elevenlabs` returns a single-use realtime
   token; each route holds its own upstream secret as a wrangler secret. The
   one contract every response honours: an ISO-8601 `expiration` field.
-- **A page names itself, not the grant — the key contract.** A site sends
-  only its own key (`?key=scratch`) alongside the ambient Access identity,
+- **A grant path selects the credential configuration.** A site sends
+  only its grant path (`?grant_path=scratch`) alongside the ambient Access identity,
   and the route answers with everything needed to consume the credential:
-  for AWS the STS envelope plus its region, for OpenAI that envelope plus
-  the entire federation config in one mint. Role ARNs, service accounts,
+  for AWS the STS envelope plus its region, for OpenAI an identity token
+  and the federation configuration. Role ARNs, service accounts,
   provider ids and audiences stay on the broker, which means re-pointing a
   site at a different grant is a broker-side edit and no site republishes.
-  The predecessor — `?role=`, where the page named the grant — still
-  resolves and is deprecated.
+  The deprecated `key` option now sends `grant_path`. The older `role`
+  selector still sends `?role=` for services that support it.
 - **Dev is the deployed worker, cross-origin.** A dev server on any
   localhost port calls the production broker with the Access cookie riding
   along (`credentials: "include"`); the worker echoes loopback origins only
   (see `cf-loopback-cors`). No local stubs, no proxies, no per-port config.
 
-## Three credential species
+## Credential types
 
 The packages split along how the credential *behaves*, which turned out to
 matter more than which vendor issues it:
 
-| Species | Behaviour | Client model | Example |
+| Type | Behaviour | Client model | Example |
 |---|---|---|---|
 | **Session credential** | Valid for hours, reusable | `CredentialManager`: cache, refresh before expiry, notify on rotation | AWS STS role creds; MotherDuck read-scaling tokens |
 | **Federated exchange** | Browser holds one credential, derives another | Provider callback the consuming SDK re-invokes | OpenAI workload identity |
 | **Single-use token** | Consumed at first use | Fetch immediately before each connection — never cache | ElevenLabs realtime |
 
 The core `CredentialManager` is generic over the envelope and implements the
-first species; the OpenAI package chains off it for the second; the
+first type; the OpenAI package chains off it for the second; the
 ElevenLabs package deliberately bypasses it for the third.
 
 ## Package map
@@ -81,10 +81,10 @@ ElevenLabs package deliberately bypasses it for the third.
 | Package | Role |
 |---|---|
 | [cf-browser-credentials](/packages/cf-browser-credentials) | generic in-browser credential manager |
-| [cf-creds-worker](/packages/cf-creds-worker) | worker-side mint kit: STS AssumeRole, Access identity verification, mint policy + log |
+| [cf-creds-worker](/packages/cf-creds-worker) | credential service helpers: STS AssumeRole, Access identity verification, credential policy + log |
 | [cf-loopback-cors](/packages/cf-loopback-cors) | loopback-only CORS echo for the cross-origin dev flow |
 | [cf-creds-aws](/packages/cf-creds-aws) | AWS envelope, typed manager, SigV4 signed fetch, ListObjectsV2 |
-| [cf-creds-openai](/packages/cf-creds-openai) | keyless OpenAI via AWS workload identity federation |
+| [cf-creds-openai](/packages/cf-creds-openai) | OpenAI workload identity federation with service-issued tokens |
 | [cf-creds-elevenlabs](/packages/cf-creds-elevenlabs) | single-use realtime tokens |
 | [cf-creds-mosaic](/packages/cf-creds-mosaic) | credential-aware Mosaic/DuckDB-Wasm connector |
 | [cf-creds-motherduck](/packages/cf-creds-motherduck) | MotherDuck in the tab: token manager + engine holder over the wasm client |

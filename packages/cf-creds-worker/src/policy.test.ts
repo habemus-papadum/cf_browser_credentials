@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AccessIdentity } from "./identity.js";
-import { allowAll, logMint, mintLogRecord } from "./policy.js";
+import {
+  allowAll,
+  credentialRequestLogRecord,
+  logCredentialRequest,
+  logMint,
+  mintLogRecord,
+} from "./policy.js";
 
 const user: AccessIdentity = { kind: "user", email: "nehal@example.com", claims: {} };
 const machine: AccessIdentity = { kind: "service-token", commonName: "abc.access", claims: {} };
@@ -20,12 +26,12 @@ describe("allowAll", () => {
   });
 });
 
-describe("mintLogRecord", () => {
+describe("credentialRequestLogRecord", () => {
   it("summarises the identity and lifts the ray id off the request", () => {
     const request = new Request("https://site.example/api/credentials/aws", {
       headers: { "cf-ray": "8f00ba55-SJC" },
     });
-    const record = mintLogRecord({
+    const record = credentialRequestLogRecord({
       provider: "aws",
       outcome: "allowed",
       identity: user,
@@ -34,7 +40,7 @@ describe("mintLogRecord", () => {
       expiration: "2026-08-11T12:00:00Z",
     });
     expect(record).toEqual({
-      type: "credential-mint",
+      type: "credential_request",
       provider: "aws",
       outcome: "allowed",
       identity: { kind: "user", email: "nehal@example.com" },
@@ -46,7 +52,7 @@ describe("mintLogRecord", () => {
   });
 
   it("names service tokens and carries denial reasons", () => {
-    const record = mintLogRecord({
+    const record = credentialRequestLogRecord({
       provider: "aws",
       outcome: "denied",
       identity: machine,
@@ -58,23 +64,32 @@ describe("mintLogRecord", () => {
   });
 
   it("tolerates a null identity for verification failures", () => {
-    const record = mintLogRecord({ provider: "aws", outcome: "denied", identity: null });
+    const record = credentialRequestLogRecord({
+      provider: "aws",
+      outcome: "denied",
+      identity: null,
+    });
     expect(record.identity).toBeNull();
   });
 });
 
-describe("logMint", () => {
+describe("logCredentialRequest", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("emits one JSON line", () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
-    logMint({ provider: "aws", outcome: "allowed", identity: user });
+    logCredentialRequest({ provider: "aws", outcome: "allowed", identity: user });
     expect(log).toHaveBeenCalledOnce();
     const parsed = JSON.parse(log.mock.calls[0][0] as string);
     expect(parsed).toMatchObject({
-      type: "credential-mint",
+      type: "credential_request",
       provider: "aws",
       identity: { email: "nehal@example.com" },
     });
   });
+});
+
+it("retains public logging aliases at the boundary", () => {
+  expect(logMint).toBe(logCredentialRequest);
+  expect(mintLogRecord).toBe(credentialRequestLogRecord);
 });

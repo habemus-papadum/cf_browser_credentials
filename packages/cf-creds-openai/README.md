@@ -1,55 +1,55 @@
 # @habemus-papadum/cf-creds-openai
 
-Keyless OpenAI in the browser, federated straight from the credentials
-service's own OIDC issuer. One keyed mint returns the whole bundle: a
-short-lived identity token the service signed — its issuer the service, its
-audience the one OpenAI's workload identity provider is registered with, the
-grant key as a claim the provider's mapping matches — plus the
-identity-provider and service-account ids. The OpenAI SDK's
-`workloadIdentity` option exchanges the token internally and re-invokes the
-provider whenever its access token needs renewal; a fresh token is a fresh
-mint. No API key and no cloud credential exists anywhere in the chain, and
-disabling the mapping neutralizes even already-issued access tokens.
+Use OpenAI workload identity federation in a browser. The credential service
+issues a short-lived identity token and returns the OpenAI identity-provider
+and service-account IDs. The OpenAI SDK exchanges that token and requests a
+replacement when its access token needs renewal.
 
-Peer: `openai`.
+```mermaid
+sequenceDiagram
+    participant Page as Browser page
+    participant Service as Credential service
+    participant SDK as OpenAI SDK
+    participant OpenAI
+    Page->>Service: Request openai credentials with grant_path
+    Service-->>Page: Identity token and federation IDs
+    Page->>SDK: Configure workloadIdentity
+    SDK->>OpenAI: Exchange identity token
+    OpenAI-->>SDK: Access token
+```
 
-The page names only itself:
+The package's peer dependency is `openai`.
 
 ```ts
 import { createBrokeredOpenAI } from "@habemus-papadum/cf-creds-openai";
 
 const { client, manager } = await createBrokeredOpenAI({
   base: "https://creds.example.com",
-  key: "research", // this site's own name at the service
+  grantPath: "research",
 });
 
-manager.onRotate((creds) => showExpiry(creds.expiration));
-
+manager.onRotate((credentials) => showExpiry(credentials.expiration));
 const response = await client.responses.create({ model: "gpt-4o-mini", input: "hi" });
 ```
 
-The factory is async because the service's ids are known only once the
-bundle has been fetched: the first mint happens inside it. The manager mints
-on demand — when the SDK asks for a token and the cached one is within 30 s
-of its end — and never on a timer, since the token lives minutes.
-`createOpenAICredentialManager` is the same manager on its own, typed to the
-`OpenAICredentials` bundle; `brokeredSubjectTokenProvider` wraps one as the
-provider the SDK takes.
+The factory makes the first credential request before returning the configured
+client. Later requests occur on demand when the SDK asks for a token and the
+cached token expires within 30 seconds. This manager uses no refresh timer.
 
-Browser gotchas the factory absorbs: `dangerouslyAllowBrowser` (required by
-the SDK in browsers even though there is no key to expose here) and a
-binding-preserving fetch wrapper (the SDK's exchange helper calls its stored
-fetch method-style, which browsers reject unless rebound).
+`createOpenAICredentialManager()` returns the credential manager alone.
+`brokeredSubjectTokenProvider()` adapts it to the OpenAI SDK's token callback.
+The factory also enables the SDK's browser support and supplies a fetch wrapper
+that preserves the browser's required function binding.
 
-One-time prerequisites, service-side: an OpenAI project + service account
-with a project role, and — dashboard-only — a workload identity provider for
-the service's issuer (standard OIDC discovery, the agreed audience) with a
-mapping from the key claim to the service account.
+The service needs an OpenAI project, a service account with a project role,
+and a workload identity provider registered for its issuer and audience. The
+provider mapping associates the JWT `grant_path` claim with the service account.
+Update existing mappings that use the previous `key` claim when deploying the
+new service. Until those mappings are updated, token exchange will fail.
 
-## Through 0.5: the AWS leg
+## Versions through 0.5
 
-Earlier versions rode AWS workload identity federation: the bundle was an
-STS envelope and the page minted a `GetWebIdentityToken` JWT itself through
-`@aws-sdk/client-sts`, with a role per grant behind it. That leg and the
-`createFederatedOpenAI` / `awsSubjectTokenProvider` entry points are gone; a
-service still answering the envelope shape needs 0.5.
+Versions through 0.5 used AWS STS `GetWebIdentityToken` and an AWS role per grant.
+The current package uses service-issued identity tokens. The old
+`createFederatedOpenAI()` and `awsSubjectTokenProvider()` entry points were removed
+in 0.6. A service that still returns the old AWS envelope requires a 0.5 client.

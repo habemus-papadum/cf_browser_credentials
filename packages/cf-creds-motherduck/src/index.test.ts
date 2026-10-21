@@ -18,9 +18,9 @@ const envelope = (token: string, ttlMs = 3_600_000): MotherDuckCredentials => ({
 });
 
 describe("the route", () => {
-  it("names the site with its own key at a well-known service", () => {
-    expect(motherDuckCredentialsUrl("https://creds.example.com", { key: "notes" })).toBe(
-      "https://creds.example.com/api/credentials/motherduck?key=notes",
+  it("names the credential grant path at a well-known service", () => {
+    expect(motherDuckCredentialsUrl("https://creds.example.com", { grantPath: "notes" })).toBe(
+      "https://creds.example.com/api/credentials/motherduck?grant_path=notes",
     );
   });
 });
@@ -28,7 +28,7 @@ describe("the route", () => {
 describe("createMotherDuckCredentialManager", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("fetches the keyed route once and caches until near expiry", async () => {
+  it("fetches the grant route once and caches until near expiry", async () => {
     const fetchMock = vi.fn(
       async () => new Response(JSON.stringify(envelope("tok_1")), { status: 200 }),
     );
@@ -36,7 +36,7 @@ describe("createMotherDuckCredentialManager", () => {
 
     const manager = createMotherDuckCredentialManager({
       base: "https://creds.example.com",
-      key: "notes",
+      grantPath: "notes",
     });
     const first = await manager.get();
     const second = await manager.get();
@@ -45,21 +45,24 @@ describe("createMotherDuckCredentialManager", () => {
     expect(second).toBe(first);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe(
-      "https://creds.example.com/api/credentials/motherduck?key=notes",
+      "https://creds.example.com/api/credentials/motherduck?grant_path=notes",
     );
   });
 
-  it("surfaces the broker's refusal of an unknown key", async () => {
+  it("surfaces the broker's refusal of an unknown grant path", async () => {
     vi.stubGlobal(
       "fetch",
       async () =>
-        new Response(JSON.stringify({ error: "no motherduck grant for key: nope" }), {
+        new Response(JSON.stringify({ error: "no motherduck grant for path: nope" }), {
           status: 404,
         }),
     );
     await expect(
-      createMotherDuckCredentialManager({ base: "https://creds.example.com", key: "nope" }).get(),
-    ).rejects.toThrow(/404.*no motherduck grant for key: nope/s);
+      createMotherDuckCredentialManager({
+        base: "https://creds.example.com",
+        grantPath: "nope",
+      }).get(),
+    ).rejects.toThrow(/404.*no motherduck grant for path: nope/s);
   });
 });
 

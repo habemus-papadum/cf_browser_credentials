@@ -10,7 +10,7 @@ envelope the AWS broker route returns, and a typed manager factory defaulting
 to the conventional `/api/credentials/aws` route.
 
 Against a well-known credentials service the page names **itself** — its
-`key` — and the broker answers with the credentials *and* the region they are
+`grantPath` — and the broker answers with the credentials *and* the region they are
 for. No role name, no ARN, no region constant in site code; re-pointing a
 site is a broker-side edit. Cross-origin first-touch auth is handled by the
 login bounce in `@habemus-papadum/cf-browser-credentials`.
@@ -24,7 +24,7 @@ import {
 
 const manager = createAwsCredentialManager({
   base: "https://creds.example.com",
-  key: "scratch", // this site's own name at the service
+  grantPath: "scratch", // this site's own name at the service
 });
 
 // The region rides in the envelope, so nothing to pass here:
@@ -47,10 +47,10 @@ route, or a bucket in another region) — an explicit value always wins.
 The optional `onResponse` hook observes every response — request counting and
 byte accounting for traffic-honest dashboards.
 
-## Legacy: the `role` lane
+## Legacy: the `role` selector
 
-Before the key contract, a page named the *grant* it wanted:
+Before the grant path contract, a page named the *grant* it wanted:
 `createAwsCredentialManager({ base, role: "smoke" })`, sent as `?role=`.
 Brokers still serve it and the option still works, but it leaks an internal
-name into site code and returns no region. `key` and `role` are mutually
+name into site code and returns no region. `grantPath` and `role` are mutually
 exclusive; either one requires `base`.

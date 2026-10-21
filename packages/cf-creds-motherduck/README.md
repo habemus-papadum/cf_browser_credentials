@@ -18,8 +18,8 @@ Peers (optional): `@motherduck/wasm-client`, `apache-arrow` (the client's own pe
 
 ## Worker route
 
-The broker's `/api/credentials/motherduck` route resolves the site's key to a
-lane — a MotherDuck **service account** (whose Duckling size and read-scaling
+The broker's `/api/credentials/motherduck` route resolves the site's grant path to a
+configuration — a MotherDuck **service account** (whose Duckling size and read-scaling
 flock are the tier) and a TTL — and mints a read-scaling token through the
 REST API with the organization admin's token held as a worker secret:
 
@@ -52,7 +52,7 @@ import { wasmConnector } from "@uwdata/mosaic-core";
 // The page names only itself; the route answers with the token.
 const manager = createMotherDuckCredentialManager({
   base: "https://creds.example.com",
-  key: "notes",
+  grantPath: "notes",
 });
 
 // The engine: built on first ready(), from whatever token the manager holds then.

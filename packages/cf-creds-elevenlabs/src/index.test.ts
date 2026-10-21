@@ -44,21 +44,24 @@ describe("fetchScribeToken", () => {
       status: 200,
     });
 
-  it("names the site with its own key at a well-known service", () => {
-    expect(elevenLabsCredentialsUrl("https://creds.example.com", { key: "scratch" })).toBe(
-      "https://creds.example.com/api/credentials/elevenlabs?key=scratch",
+  it("names the credential grant path at a well-known service", () => {
+    expect(elevenLabsCredentialsUrl("https://creds.example.com", { grantPath: "scratch" })).toBe(
+      "https://creds.example.com/api/credentials/elevenlabs?grant_path=scratch",
     );
   });
 
-  it("fetches the keyed route from broker options", async () => {
+  it("fetches the grant route from broker options", async () => {
     const fetchMock = vi.fn(async () => token());
     vi.stubGlobal("fetch", fetchMock);
 
-    const creds = await fetchScribeToken({ base: "https://creds.example.com", key: "scratch" });
+    const creds = await fetchScribeToken({
+      base: "https://creds.example.com",
+      grantPath: "scratch",
+    });
 
     expect(creds.token).toBe("sutkn_abc");
     expect(fetchMock.mock.calls[0][0]).toBe(
-      "https://creds.example.com/api/credentials/elevenlabs?key=scratch",
+      "https://creds.example.com/api/credentials/elevenlabs?grant_path=scratch",
     );
   });
 
@@ -69,27 +72,29 @@ describe("fetchScribeToken", () => {
     await fetchScribeToken("/api/credentials/elevenlabs");
     expect(fetchMock.mock.calls[0][0]).toBe("/api/credentials/elevenlabs");
 
-    const url = new URL(await connectUrl({ base: "https://creds.example.com", key: "scratch" }));
+    const url = new URL(
+      await connectUrl({ base: "https://creds.example.com", grantPath: "scratch" }),
+    );
     expect(fetchMock.mock.calls[1][0]).toBe(
-      "https://creds.example.com/api/credentials/elevenlabs?key=scratch",
+      "https://creds.example.com/api/credentials/elevenlabs?grant_path=scratch",
     );
     expect(url.searchParams.get("token")).toBe("sutkn_abc");
   });
 
-  it("surfaces the broker's refusal of an unknown key", async () => {
+  it("surfaces the broker's refusal of an unknown grant path", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(
         async () =>
-          new Response(JSON.stringify({ error: "no elevenlabs grant for key: nope" }), {
+          new Response(JSON.stringify({ error: "no elevenlabs grant for path: nope" }), {
             status: 404,
           }),
       ),
     );
 
     await expect(
-      fetchScribeToken({ base: "https://creds.example.com", key: "nope" }),
-    ).rejects.toThrow(/404.*no elevenlabs grant for key: nope/s);
+      fetchScribeToken({ base: "https://creds.example.com", grantPath: "nope" }),
+    ).rejects.toThrow(/404.*no elevenlabs grant for path: nope/s);
   });
 });
 

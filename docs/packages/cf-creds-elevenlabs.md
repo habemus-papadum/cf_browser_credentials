@@ -1,6 +1,6 @@
 # @habemus-papadum/cf-creds-elevenlabs
 
-ElevenLabs single-use realtime tokens — the third credential species in this
+ElevenLabs single-use realtime tokens — a single-use credential type in this
 kit. No AWS federation exists at ElevenLabs, and their realtime tokens are
 **single-use** (consumed at first connect) with a fixed 15-minute TTL, so the
 cache-until-expiry `CredentialManager` model would hand out dead tokens.
@@ -20,14 +20,14 @@ if (url.pathname === `${base}/elevenlabs`) {
 ```
 
 Browser, one call per connection. Against a well-known credentials service
-the page names **itself** — its `key` — and the broker resolves the rest:
+the page names a grant — its `grantPath` — and the broker resolves the rest:
 
 ```ts
 import { connectUrl } from "@habemus-papadum/cf-creds-elevenlabs";
 
 const ws = new WebSocket(
   await connectUrl(
-    { base: "https://creds.example.com", key: "scratch" },
+    { base: "https://creds.example.com", grantPath: "scratch" },
     { audioFormat: "pcm_24000", includeTimestamps: true },
   ),
 );

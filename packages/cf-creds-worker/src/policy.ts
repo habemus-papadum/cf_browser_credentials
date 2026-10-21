@@ -1,13 +1,10 @@
 /**
- * The mint-policy seam and the mint log.
+ * Credential authorization and request logs.
  *
- * Posture: **attribution before authorization**. Every mint flows through a
- * policy that sees the verified identity, and every outcome — allowed or
- * denied — is logged. But the shipped default is {@link allowAll}: anyone
- * Cloudflare Access admitted gets the deployment's standard grant. A real
- * policy is written the day a lane needs one (a scoped-down role for an
- * agent's service token, a shorter TTL for a semi-trusted context), not
- * installed as ceremony in advance.
+ * A policy receives the verified Access identity and decides which credentials
+ * to provide. Every outcome can be recorded with logCredentialRequest().
+ * The allowAll() helper returns the same grant for all authenticated callers.
+ * Deployments that need additional restrictions must supply their own policy.
  *
  * @packageDocumentation
  */
@@ -15,34 +12,34 @@
 import type { AccessIdentity } from "./identity.js";
 
 /** What a policy sees: who is asking, for which provider, on what request. */
-export interface MintContext {
+export interface CredentialContext {
   identity: AccessIdentity;
-  /** Provider key — the route: "aws", "elevenlabs", … */
+  /** Provider route: "aws", "elevenlabs", … */
   provider: string;
   request: Request;
 }
 
 /**
- * A grant carries the provider-specific mint parameters (for AWS: role ARN,
+ * A grant carries the provider-specific request parameters (for AWS: role ARN,
  * duration, session tags), so the policy is where credential *shaping*
  * lives, not just yes/no.
  */
-export type MintDecision<Grant> =
+export type CredentialDecision<Grant> =
   | { allow: true; grant: Grant }
   | { allow: false; reason: string; status?: number };
 
-export type MintPolicy<Grant> = (
-  context: MintContext,
-) => MintDecision<Grant> | Promise<MintDecision<Grant>>;
+export type CredentialPolicy<Grant> = (
+  context: CredentialContext,
+) => CredentialDecision<Grant> | Promise<CredentialDecision<Grant>>;
 
 /** The default posture: everyone Access admitted gets the standard grant. */
-export function allowAll<Grant>(grant: Grant): MintPolicy<Grant> {
+export function allowAll<Grant>(grant: Grant): CredentialPolicy<Grant> {
   return () => ({ allow: true, grant });
 }
 
-/** One structured log line per mint attempt. */
-export interface MintLogRecord {
-  type: "credential-mint";
+/** One structured log line per credential request. */
+export interface CredentialRequestLogRecord {
+  type: "credential_request";
   provider: string;
   outcome: "allowed" | "denied" | "error";
   identity: { kind: string; email?: string; commonName?: string } | null;
@@ -53,7 +50,7 @@ export interface MintLogRecord {
   colo?: string;
 }
 
-export interface MintLogInput {
+export interface CredentialRequestLogInput {
   provider: string;
   outcome: "allowed" | "denied" | "error";
   /** Null when verification itself failed — there is no identity to name. */
@@ -65,11 +62,13 @@ export interface MintLogInput {
   expiration?: string;
 }
 
-export function mintLogRecord(input: MintLogInput): MintLogRecord {
+export function credentialRequestLogRecord(
+  input: CredentialRequestLogInput,
+): CredentialRequestLogRecord {
   const { request, identity, ...rest } = input;
   const cf = request ? (request as Request & { cf?: { colo?: string } }).cf : undefined;
   return {
-    type: "credential-mint",
+    type: "credential_request",
     ...rest,
     identity:
       identity &&
@@ -82,11 +81,26 @@ export function mintLogRecord(input: MintLogInput): MintLogRecord {
 }
 
 /**
- * Emit the mint record as one JSON line. With `observability.enabled` in the
+ * Emit the credential request record as one JSON line. With `observability.enabled` in the
  * worker's wrangler config, Workers Logs captures and indexes the fields —
  * that is the integration with Cloudflare's logging infrastructure; Logpush
  * is the incremental step if retention beyond days is ever needed.
  */
-export function logMint(input: MintLogInput): void {
-  console.log(JSON.stringify(mintLogRecord(input)));
+export function logCredentialRequest(input: CredentialRequestLogInput): void {
+  console.log(JSON.stringify(credentialRequestLogRecord(input)));
 }
+
+/** @deprecated Use CredentialContext. */
+export type MintContext = CredentialContext;
+/** @deprecated Use CredentialDecision. */
+export type MintDecision<Grant> = CredentialDecision<Grant>;
+/** @deprecated Use CredentialPolicy. */
+export type MintPolicy<Grant> = CredentialPolicy<Grant>;
+/** @deprecated Use CredentialRequestLogRecord. */
+export type MintLogRecord = CredentialRequestLogRecord;
+/** @deprecated Use CredentialRequestLogInput. */
+export type MintLogInput = CredentialRequestLogInput;
+/** @deprecated Use credentialRequestLogRecord. New records use credential_request. */
+export const mintLogRecord = credentialRequestLogRecord;
+/** @deprecated Use logCredentialRequest. New records use credential_request. */
+export const logMint = logCredentialRequest;

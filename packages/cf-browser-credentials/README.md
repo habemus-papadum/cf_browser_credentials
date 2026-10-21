@@ -1,88 +1,79 @@
 # @habemus-papadum/cf-browser-credentials
 
-Browser-side credential manager for static sites whose ephemeral credentials
-are minted by a broker endpoint (typically a Cloudflare Worker behind
-Cloudflare Access) — same-origin routes (`/api/credentials/aws`,
-`/api/credentials/elevenlabs`, …) or a **well-known cross-origin credentials
-service** (e.g. `https://creds.example.com`). Caches in memory, refreshes
-before expiry, deduplicates concurrent fetches, notifies consumers on
-rotation.
+Request short-lived credentials from a service protected by Cloudflare Access.
+The manager caches credentials in memory, combines concurrent requests, and
+refreshes before expiration. It works with relative routes on the site's origin
+and with a credential service on another hostname.
 
-The manager is **generic over the credential envelope**: each provider route
-returns its own shape, and the only field the manager itself requires is
-`expiration` (ISO-8601) — that is the whole provider contract. AWS-specific
-types and helpers live in `@habemus-papadum/cf-creds-aws`; a new provider is
-a new route plus a type, with no changes here.
+Provider responses must include an ISO-8601 `expiration` timestamp. Other fields
+belong to each provider. Packages such as `cf-creds-aws` define those fields and
+provide typed factories.
 
 ```ts
-import { CredentialManager } from "@habemus-papadum/cf-browser-credentials";
+import { CredentialManager, credentialsUrl } from "@habemus-papadum/cf-browser-credentials";
 
-interface ElevenLabsCredential {
+interface CredentialBundle {
   token: string;
   expiration: string;
 }
 
-const manager = new CredentialManager<ElevenLabsCredential>({
-  // Dev servers call the deployed broker cross-origin; the auth cookie rides
-  // along. Same-origin relative in production.
-  url: "/api/credentials/elevenlabs",
+const manager = new CredentialManager<CredentialBundle>({
+  url: credentialsUrl("/api/credentials/example", {
+    base: "https://creds.example.com",
+    grantPath: "research/example",
+  }),
 });
 
-const creds = await manager.get();          // cached, refreshed inside the margin
-manager.onRotate((c) => reconfigure(c));    // push rotations to consumers
+const credentials = await manager.get();
+manager.onRotate((next) => reconfigure(next));
 ```
 
-Semantics worth relying on:
+`get()` returns cached credentials until expiration is within `refreshMarginMs`
+(default: 10 minutes). Concurrent calls share one request. A background timer
+also refreshes at that margin; `get()` checks expiration independently in case
+the browser delays the timer. Credentials are stored only in memory.
 
-- `get()` returns cached credentials until they are within `refreshMarginMs`
-  (default 10 min) of expiry, then refreshes; concurrent callers share one
-  in-flight request.
-- A background timer refreshes at `expiration − margin`; browser tab
-  throttling only delays it — `get()` re-checks on every call, so
-  correctness never depends on the timer.
-- Credentials live in memory only.
+## Select a grant
 
-The cross-origin dev flow requires the broker to echo loopback origins with
-credentials allowed — see `@habemus-papadum/cf-loopback-cors`.
-
-## The key contract
-
-A page addresses a well-known credentials service by **key**: it sends its
-own name and nothing else, and the route answers with everything needed to
-consume the credential — for AWS the STS envelope *plus* its region, for
-OpenAI that envelope plus the whole federation config. Internal names (role
-ARNs, service accounts, provider ids, audiences) never reach site code, so
-re-pointing a site at a different grant is a broker-side edit and no site
-republishes.
-
-`credentialsUrl` builds those URLs; each provider package wraps it with its
-own route path, so pages normally pass `{ base, key }` to a factory and
-never see this:
+A grant path identifies server-side credential configuration. Cloudflare Access
+supplies the caller's identity; selecting a path does not itself grant access.
+The response includes the provider configuration needed to use the credentials.
+For AWS this includes the region. For OpenAI it includes an identity token and
+identity-provider and service-account IDs.
 
 ```ts
-import { credentialsUrl } from "@habemus-papadum/cf-browser-credentials";
+credentialsUrl("/api/credentials/aws", {
+  base: "https://creds.example.com",
+  grantPath: "scratch",
+});
+// https://creds.example.com/api/credentials/aws?grant_path=scratch
 
-credentialsUrl("/api/credentials/aws", { base: "https://creds.example.com", key: "scratch" });
-// → "https://creds.example.com/api/credentials/aws?key=scratch"
-
-credentialsUrl("/api/credentials/aws"); // → same-origin route, unchanged
+credentialsUrl("/api/credentials/aws", { grantPath: "scratch" });
+// /api/credentials/aws?grant_path=scratch
 ```
 
-The predecessor is the `role` lane (`?role=`), where the page named the
-grant rather than itself. It still resolves and is deprecated. A key rides same-origin routes too
-(the broker serves no default bundle, so the key always says which grant is
-meant); key and role are mutually exclusive.
+Provider factories accept the same `{ base, grantPath }` options. An explicit
+`url` overrides route construction. Without `base`, the URL stays relative;
+without a target, the helper leaves the route unchanged.
 
-## The login bounce
+`key` is a deprecated alias for `grantPath`; it also sends `grant_path`.
+Different values for `key` and `grantPath` are rejected. The deprecated `role`
+selector continues to send `?role=` for older services. It cannot be combined
+with either grant-path option. Deploy service support for `grant_path` before
+upgrading clients to this SDK version.
 
-Access cookies are per-hostname, so the first fetch of a session against a
-cross-origin credentials service fails before the browser holds that host's
-cookie (Access 302s the background fetch into an IdP flow, surfacing as a
-CORS error). `fetchCredentials` — used by the manager and exported directly —
-handles this automatically for cross-origin URLs: it opens the endpoint in a
-popup once (a top-level navigation completes the SSO dance and sets the
-cookie), polls until the fetch succeeds, and closes the popup. Pass
-`loginUrl` to bounce via a dedicated self-closing page (e.g. `/api/login`)
-when the service offers one, `bounce: false` to opt out, and catch
-`AccessLoginRequired` to rerun the bounce from a user gesture when the
-popup is blocked.
+## Complete Access login
+
+Access cookies are specific to each hostname. A background request cannot
+complete an interactive identity-provider login. When a cross-origin request
+requires authentication, `fetchCredentials()` opens a login popup, retries the
+request, and closes the popup after success. `CredentialManager` uses this
+function internally.
+
+Set `loginUrl` to a dedicated login page, such as `/api/login`, or use
+`bounce: false` to disable popups. If a popup is blocked, catch
+`AccessLoginRequired` and open its `loginUrl` from a user gesture, then retry.
+
+Cross-origin development also requires the service to allow the development
+origin and credentials in its CORS response. `cf-loopback-cors` provides this
+for loopback origins.

@@ -23,7 +23,7 @@ export interface AwsCredentials extends EphemeralCredential {
   secretAccessKey: string;
   sessionToken: string;
   /**
-   * The region the key's grant targets. Present under the key contract, so
+   * The region the selected grant targets. Present under the grant path contract, so
    * a site can drop its baked region constant — see {@link createSignedFetch}.
    */
   region?: string;
@@ -34,7 +34,7 @@ export const AWS_CREDENTIALS_PATH = "/api/credentials/aws";
 
 /**
  * The endpoint URL at a well-known credentials service for a target — the
- * site's own key, e.g. `awsCredentialsUrl("https://creds.example.com", { key: "scratch" })`.
+ * site's grant path, e.g. `awsCredentialsUrl("https://creds.example.com", { grantPath: "scratch" })`.
  * A bare string is the deprecated `role` shorthand.
  */
 export function awsCredentialsUrl(base: string, target: string | CredentialTarget = {}): string {
@@ -45,7 +45,7 @@ export function awsCredentialsUrl(base: string, target: string | CredentialTarge
 }
 
 export interface AwsCredentialManagerOptions extends BrokerRouteOptions {
-  /** Full endpoint URL; overrides `base`/`key`. Defaults to {@link AWS_CREDENTIALS_PATH}, same-origin. */
+  /** Full endpoint URL; overrides `base`/`grantPath`. Defaults to {@link AWS_CREDENTIALS_PATH}, same-origin. */
   url?: string;
   refreshMarginMs?: number;
   /** See `CredentialFetchOptions` in cf-browser-credentials. */
@@ -70,7 +70,7 @@ export type SignedFetch = (input: string | Request, init?: RequestInit) => Promi
 
 export interface SignedFetchOptions {
   /**
-   * Region to sign for. Optional when the envelope carries one (the key
+   * Region to sign for. Optional when the envelope carries one (the grant path
    * contract): the credential's own region is then the default, and an
    * explicit value here still wins.
    */

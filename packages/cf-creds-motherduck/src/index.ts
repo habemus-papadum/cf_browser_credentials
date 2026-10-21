@@ -4,7 +4,7 @@
  * A MotherDuck read-scaling token is a **session credential** in this kit's
  * taxonomy (minutes to a year, reusable, revocable), so the browser side is
  * the plain `CredentialManager` typed to the MotherDuck envelope — the first
- * species, like AWS STS — plus an **engine holder** over
+ * credential type, like AWS STS — plus an **engine holder** over
  * `@motherduck/wasm-client`, because the token is consumed by a DuckDB
  * instance rather than by a fetch.
  *
@@ -53,7 +53,7 @@ export interface MotherDuckCredentials extends EphemeralCredential {
   /** A MotherDuck access token, normally `read_scaling`. */
   token: string;
   /**
-   * The lane's account the token was minted for, when the route says so.
+   * The account the token was minted for, when the route says so.
    * Informational — a page never needs it; it names the compute tier's owner.
    */
   serviceAccount?: string;
@@ -63,15 +63,15 @@ export interface MotherDuckCredentials extends EphemeralCredential {
 export const MOTHERDUCK_CREDENTIALS_PATH = "/api/credentials/motherduck";
 
 /**
- * The endpoint URL at a well-known credentials service for a site's key,
- * e.g. `motherDuckCredentialsUrl("https://creds.example.com", { key: "notes" })`.
+ * The endpoint URL at a well-known credentials service for a site's grant path,
+ * e.g. `motherDuckCredentialsUrl("https://creds.example.com", { grantPath: "notes" })`.
  */
 export function motherDuckCredentialsUrl(base: string, target: CredentialTarget = {}): string {
   return credentialsUrl(MOTHERDUCK_CREDENTIALS_PATH, { base, ...target });
 }
 
 export interface MotherDuckCredentialManagerOptions extends BrokerRouteOptions {
-  /** Full endpoint URL; overrides `base`/`key`. Defaults to {@link MOTHERDUCK_CREDENTIALS_PATH}, same-origin. */
+  /** Full endpoint URL; overrides `base`/`grantPath`. Defaults to {@link MOTHERDUCK_CREDENTIALS_PATH}, same-origin. */
   url?: string;
   /** Refresh this long before expiration (the kit default, 10 minutes). */
   refreshMarginMs?: number;

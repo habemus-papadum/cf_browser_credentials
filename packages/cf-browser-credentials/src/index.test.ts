@@ -38,13 +38,13 @@ describe("credentialsUrl", () => {
   const PATH = "/api/credentials/aws";
   const BASE = "https://creds.example.com";
 
-  it("carries the site's own key to a well-known service", () => {
-    expect(credentialsUrl(PATH, { base: BASE, key: "scratch" })).toBe(
-      "https://creds.example.com/api/credentials/aws?key=scratch",
+  it("carries the site's grant path to a well-known service", () => {
+    expect(credentialsUrl(PATH, { base: BASE, grantPath: "scratch" })).toBe(
+      "https://creds.example.com/api/credentials/aws?grant_path=scratch",
     );
   });
 
-  it("still builds the legacy role lane", () => {
+  it("still builds the legacy role selector", () => {
     expect(credentialsUrl(PATH, { base: BASE, role: "smoke" })).toBe(
       "https://creds.example.com/api/credentials/aws?role=smoke",
     );
@@ -52,30 +52,49 @@ describe("credentialsUrl", () => {
 
   it("defaults to the same-origin route, and an explicit url wins", () => {
     expect(credentialsUrl(PATH)).toBe(PATH);
-    expect(credentialsUrl(PATH, { url: "/elsewhere", base: BASE, key: "scratch" })).toBe(
+    expect(credentialsUrl(PATH, { url: "/elsewhere", base: BASE, grantPath: "scratch" })).toBe(
       "/elsewhere",
     );
   });
 
-  it("rejects key and role together", () => {
-    expect(() => credentialsUrl(PATH, { base: BASE, key: "scratch", role: "smoke" })).toThrow(
+  it("rejects grantPath and role together", () => {
+    expect(() => credentialsUrl(PATH, { base: BASE, grantPath: "scratch", role: "smoke" })).toThrow(
       /mutually exclusive/,
     );
   });
 
-  it("carries the key on the same-origin route too — the broker has no default bundle", () => {
-    // A lane minter 400s a keyless route ("a missing key is always an
-    // error"); refusing key-without-base here collided with that live
-    // (2026-08-24). Same origin says where the broker lives, not which
-    // grant is meant.
-    expect(credentialsUrl(PATH, { key: "pitch" })).toBe("/api/credentials/aws?key=pitch");
+  it("carries the grant path on the same-origin route too — the broker has no default bundle", () => {
+    // Same origin selects the server; the grant path selects its configuration.
+    expect(credentialsUrl(PATH, { grantPath: "pitch" })).toBe(
+      "/api/credentials/aws?grant_path=pitch",
+    );
     expect(credentialsUrl(PATH, { role: "smoke" })).toBe("/api/credentials/aws?role=smoke");
     // A path that already carries a query gains the target with '&'.
-    expect(credentialsUrl(`${PATH}?v=2`, { key: "pitch" })).toBe(
-      "/api/credentials/aws?v=2&key=pitch",
+    expect(credentialsUrl(`${PATH}?v=2`, { grantPath: "pitch" })).toBe(
+      "/api/credentials/aws?v=2&grant_path=pitch",
     );
     // Encoding survives.
-    expect(credentialsUrl(PATH, { key: "a b" })).toBe("/api/credentials/aws?key=a%20b");
+    expect(credentialsUrl(PATH, { grantPath: "a b" })).toBe(
+      "/api/credentials/aws?grant_path=a%20b",
+    );
+  });
+
+  it("normalizes the deprecated key selector", () => {
+    expect(credentialsUrl(PATH, { key: "research/heavy" })).toBe(
+      "/api/credentials/aws?grant_path=research%2Fheavy",
+    );
+    expect(credentialsUrl(PATH, { grantPath: "research", key: "research" })).toBe(
+      "/api/credentials/aws?grant_path=research",
+    );
+  });
+
+  it("rejects conflicting new and old grant selectors", () => {
+    expect(() => credentialsUrl(PATH, { grantPath: "research", key: "control" })).toThrow(
+      /must identify the same grant/,
+    );
+    expect(() => credentialsUrl(PATH, { key: "research", role: "smoke" })).toThrow(
+      /mutually exclusive/,
+    );
   });
 });
 

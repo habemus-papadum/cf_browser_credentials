@@ -1,8 +1,8 @@
 /**
- * Server-side mint kit for a credential-broker worker: turn long-lived
+ * Credential service helpers for a credential-broker worker: turn long-lived
  * source credentials into short-lived role credentials via STS AssumeRole,
  * with Cloudflare Access identity verification (identity.ts), a pluggable
- * mint policy, and a structured mint log (policy.ts).
+ * credential policy, and a structured credential request log (policy.ts).
  * Runtime-agnostic (fetch-based) — runs in workerd and Node alike.
  *
  * This is deliberately a kit, not a framework: the worker itself stays a

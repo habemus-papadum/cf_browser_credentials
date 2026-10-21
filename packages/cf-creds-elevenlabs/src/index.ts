@@ -1,7 +1,7 @@
 /**
  * ElevenLabs single-use realtime tokens.
  *
- * ElevenLabs is the third credential species in this kit: not federated (no
+ * ElevenLabs is the third credential type in this kit: not federated (no
  * AWS identity federation exists there) and not a session credential — its
  * realtime tokens are **single-use** (consumed at first connect) with a
  * fixed, non-configurable 15-minute TTL. Caching one would hand out a dead
@@ -64,13 +64,13 @@ export async function mintScribeToken(apiKey: string): Promise<ScribeToken> {
 
 /**
  * Where to fetch a token from: the well-known service (`base`) plus the
- * site's own `key`, or an explicit `url`. Fetch options ride along.
+ * site's `grantPath`, or an explicit `url`. Fetch options ride along.
  */
 export interface ScribeBrokerOptions extends BrokerRouteOptions, CredentialFetchOptions {}
 
 /**
- * The endpoint URL at a well-known credentials service for a site's key,
- * e.g. `elevenLabsCredentialsUrl("https://creds.example.com", { key: "scratch" })`.
+ * The endpoint URL at a well-known credentials service for a site's grant path,
+ * e.g. `elevenLabsCredentialsUrl("https://creds.example.com", { grantPath: "scratch" })`.
  */
 export function elevenLabsCredentialsUrl(base: string, target: CredentialTarget = {}): string {
   return credentialsUrl(ELEVENLABS_CREDENTIALS_PATH, { base, ...target });
@@ -129,7 +129,7 @@ export function scribeSocketUrl(token: string, options: ScribeSocketOptions = {}
  *
  * ```ts
  * const ws = new WebSocket(
- *   await connectUrl({ base: "https://creds.example.com", key: "scratch" }),
+ *   await connectUrl({ base: "https://creds.example.com", grantPath: "scratch" }),
  * );
  * ```
  */
