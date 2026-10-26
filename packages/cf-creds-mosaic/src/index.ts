@@ -16,7 +16,7 @@
  * @packageDocumentation
  */
 
-import type { CredentialManager } from "@habemus-papadum/cf-browser-credentials";
+import type { RenewableCredentialSource } from "@habemus-papadum/cf-browser-credentials";
 import type { AwsCredentials } from "@habemus-papadum/cf-creds-aws";
 import type { Connector } from "@uwdata/mosaic-core";
 
@@ -39,7 +39,7 @@ const q = (value: string) => `'${value.replaceAll("'", "''")}'`;
 
 export function credentialAwareConnector(
   base: Connector,
-  manager: CredentialManager<AwsCredentials>,
+  source: RenewableCredentialSource<AwsCredentials>,
   options?: CredentialAwareOptions,
 ): Connector;
 /**
@@ -48,13 +48,13 @@ export function credentialAwareConnector(
  */
 export function credentialAwareConnector(
   base: Connector,
-  manager: CredentialManager<AwsCredentials>,
+  source: RenewableCredentialSource<AwsCredentials>,
   region: string,
   options?: CredentialAwareOptions,
 ): Connector;
 export function credentialAwareConnector(
   base: Connector,
-  manager: CredentialManager<AwsCredentials>,
+  source: RenewableCredentialSource<AwsCredentials>,
   regionOrOptions: string | CredentialAwareOptions = {},
   legacyOptions: CredentialAwareOptions = {},
 ): Connector {
@@ -88,28 +88,37 @@ export function credentialAwareConnector(
       SET s3_secret_access_key = ${q(creds.secretAccessKey)};
       SET s3_session_token = ${q(creds.sessionToken)};
     `;
-    if (mode === undefined) {
-      try {
-        await base.query({ type: "exec", sql: secretSql });
-        mode = "CREATE SECRET";
-      } catch {
-        await base.query({ type: "exec", sql: setSql });
-        mode = "SET s3_*";
+    try {
+      if (mode === undefined) {
+        try {
+          await base.query({ type: "exec", sql: secretSql });
+          mode = "CREATE SECRET";
+        } catch {
+          await base.query({ type: "exec", sql: setSql });
+          mode = "SET s3_*";
+        }
+      } else {
+        await base.query({ type: "exec", sql: mode === "CREATE SECRET" ? secretSql : setSql });
       }
-    } else {
-      await base.query({ type: "exec", sql: mode === "CREATE SECRET" ? secretSql : setSql });
+    } catch {
+      // Database errors can echo the statement, including credential values.
+      // Neither the message nor a nested cause may carry that SQL to the UI.
+      throw new Error("Unable to install AWS credentials in DuckDB.");
     }
     installedKey = creds.accessKeyId;
     options.onInstall?.(mode, creds);
   }
 
   async function ensure(): Promise<void> {
-    const creds = options.forceRefresh?.() ? await manager.refresh() : await manager.get();
-    if (creds.accessKeyId === installedKey) return;
-    installing ??= install(creds).finally(() => {
-      installing = undefined;
-    });
-    await installing;
+    const creds = options.forceRefresh?.() ? await source.refresh() : await source.get();
+    while (creds.accessKeyId !== installedKey) {
+      // Another query may be installing an earlier generation. Recheck after
+      // it finishes before allowing this query to use the database.
+      installing ??= install(creds).finally(() => {
+        installing = undefined;
+      });
+      await installing;
+    }
   }
 
   const query = async (request: { type?: string; sql: string }) => {

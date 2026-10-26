@@ -23,6 +23,7 @@ import {
   type BrokerRouteOptions,
   type CredentialFetchOptions,
   CredentialManager,
+  type CredentialSource,
   type CredentialTarget,
   credentialsUrl,
   type EphemeralCredential,
@@ -68,11 +69,11 @@ const DEFAULT_REFRESH_MARGIN_MS = 30_000;
  * per request.
  */
 export function brokeredSubjectTokenProvider(
-  manager: CredentialManager<OpenAICredentials>,
+  source: CredentialSource<OpenAICredentials>,
 ): SubjectTokenProvider {
   return {
     tokenType: "jwt",
-    getToken: async () => (await manager.get()).identityToken,
+    getToken: async () => (await source.get()).identityToken,
   };
 }
 
@@ -139,17 +140,43 @@ export async function createBrokeredOpenAI(
   options: BrokeredOpenAIOptions = {},
 ): Promise<BrokeredOpenAI> {
   const manager = createOpenAICredentialManager(options);
-  // The first request resolves the federation config; rotations keep the same
-  // grant, so the ids are read once and the manager carries the rest.
-  const bundle = await manager.get();
-  const client = new OpenAI({
+  const client = await createOpenAIFromSource(manager);
+  return { client, manager };
+}
+
+/**
+ * Build an OpenAI SDK client from an injected credential source. Authentication,
+ * response validation, caching and cleanup stay with the source's owner.
+ *
+ * The first bundle fixes the federation coordinates for this client. Later
+ * subject tokens must use the same audience, identity provider and service
+ * account. Rebuild the client deliberately to select a different target.
+ */
+export async function createOpenAIFromSource(
+  source: CredentialSource<OpenAICredentials>,
+): Promise<OpenAI> {
+  const { audience, identityProviderId, serviceAccountId } = await source.get();
+  const provider: SubjectTokenProvider = {
+    tokenType: "jwt",
+    async getToken() {
+      const bundle = await source.get();
+      if (
+        bundle.audience !== audience ||
+        bundle.identityProviderId !== identityProviderId ||
+        bundle.serviceAccountId !== serviceAccountId
+      ) {
+        throw new Error("OpenAI credential target changed; create a new client.");
+      }
+      return bundle.identityToken;
+    },
+  };
+  return new OpenAI({
     dangerouslyAllowBrowser: true,
     fetch: (...args: Parameters<typeof globalThis.fetch>) => globalThis.fetch(...args),
     workloadIdentity: {
-      identityProviderId: bundle.identityProviderId,
-      serviceAccountId: bundle.serviceAccountId,
-      provider: brokeredSubjectTokenProvider(manager),
+      identityProviderId,
+      serviceAccountId,
+      provider,
     },
   });
-  return { client, manager };
 }

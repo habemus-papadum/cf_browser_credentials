@@ -1,4 +1,4 @@
-import type { CredentialManager } from "@habemus-papadum/cf-browser-credentials";
+import type { RenewableCredentialSource } from "@habemus-papadum/cf-browser-credentials";
 import type { AwsCredentials } from "@habemus-papadum/cf-creds-aws";
 import { describe, expect, it } from "vitest";
 import { credentialAwareConnector } from "./index.js";
@@ -22,7 +22,7 @@ function fakeManager(ids: string[], region?: string) {
         i += 1;
         return current();
       },
-    } as unknown as CredentialManager<AwsCredentials>,
+    } satisfies RenewableCredentialSource<AwsCredentials>,
   };
 }
 
@@ -129,8 +129,7 @@ describe("credentialAwareConnector", () => {
     const rotating = {
       get: async () => ({ ...(await manager.get()), region }),
       refresh: async () => ({ ...(await manager.refresh()), region }),
-      // biome-ignore lint/suspicious/noExplicitAny: structural stand-in for the manager
-    } as any;
+    } satisfies RenewableCredentialSource<AwsCredentials>;
     const { base, statements } = fakeBase(false);
     const connector = credentialAwareConnector(base, rotating);
 
@@ -164,4 +163,70 @@ describe("credentialAwareConnector", () => {
     // Every query minted a new key, so every query re-installed.
     expect(executed).toEqual(["CREATE OR", "SELECT 1", "CREATE OR", "SELECT 2"]);
   });
+
+  it("installs a rotation received while the previous install is still pending", async () => {
+    const { manager, rotate } = fakeManager(["AKID1", "AKID2"], "us-east-1");
+    const events: string[] = [];
+    let releaseInstall: () => void = () => {};
+    let startedInstall: () => void = () => {};
+    const pendingInstall = new Promise<void>((resolve) => {
+      releaseInstall = resolve;
+    });
+    const installStarted = new Promise<void>((resolve) => {
+      startedInstall = resolve;
+    });
+    const base = {
+      async query({ sql }: { sql: string }) {
+        if (sql.includes("AKID1")) {
+          events.push("install first");
+          startedInstall();
+          await pendingInstall;
+        } else if (sql.includes("AKID2")) {
+          events.push("install second");
+        } else {
+          events.push(sql);
+        }
+        return [];
+      },
+    };
+    const connector = credentialAwareConnector(base, manager);
+    const first = connector.query({ type: "exec", sql: "SELECT 1" });
+    await installStarted;
+    rotate();
+    const second = connector.query({ type: "exec", sql: "SELECT 2" });
+    releaseInstall();
+    await Promise.all([first, second]);
+
+    expect(events).toContain("install second");
+    expect(events.indexOf("install second")).toBeLessThan(events.indexOf("SELECT 2"));
+  });
+
+  it.each([false, true])(
+    "does not expose credential SQL after an install failure (resolved mode: %s)",
+    async (resolvedMode) => {
+      const { manager, rotate } = fakeManager(["AKID1", "AKID2"], "us-east-1");
+      let fail = !resolvedMode;
+      const base = {
+        async query({ sql }: { sql: string }) {
+          if (fail) throw new Error(`database failure: ${sql}`);
+          return [];
+        },
+      };
+      const connector = credentialAwareConnector(base, manager);
+      if (resolvedMode) {
+        await connector.query({ type: "exec", sql: "SELECT 1" });
+        rotate();
+        fail = true;
+      }
+
+      const error = await connector
+        .query({ type: "exec", sql: "SELECT 2" })
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe("Unable to install AWS credentials in DuckDB.");
+      expect((error as Error).cause).toBeUndefined();
+      expect(String(error)).not.toContain("AKID");
+      expect(String(error)).not.toContain("SET s3_");
+    },
+  );
 });

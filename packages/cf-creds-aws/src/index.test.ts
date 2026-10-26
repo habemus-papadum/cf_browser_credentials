@@ -1,4 +1,4 @@
-import type { CredentialManager } from "@habemus-papadum/cf-browser-credentials";
+import type { CredentialSource } from "@habemus-papadum/cf-browser-credentials";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   type AwsCredentials,
@@ -8,16 +8,15 @@ import {
   listObjects,
 } from "./index.js";
 
-const manager = (sessionToken: string, region?: string) =>
-  ({
-    get: async () => ({
-      accessKeyId: "AKID",
-      secretAccessKey: "secret",
-      sessionToken,
-      region,
-      expiration: new Date(Date.now() + 3_600_000).toISOString(),
-    }),
-  }) as unknown as CredentialManager<AwsCredentials>;
+const manager = (sessionToken: string, region?: string): CredentialSource<AwsCredentials> => ({
+  get: async () => ({
+    accessKeyId: "AKID",
+    secretAccessKey: "secret",
+    sessionToken,
+    region,
+    expiration: new Date(Date.now() + 3_600_000).toISOString(),
+  }),
+});
 
 describe("createSignedFetch", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -49,6 +48,43 @@ describe("createSignedFetch", () => {
 
     const request = fetchMock.mock.calls[0][0] as Request;
     expect(request.headers.get("authorization")).toMatch(/\/eu-west-2\/s3\/aws4_request/);
+  });
+
+  it("uses newly supplied credentials on the next request", async () => {
+    const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    let generation = 1;
+    const source = {
+      get: async () => ({
+        ...(await manager(`session-${generation}`, "us-east-1").get()),
+        accessKeyId: `AKID${generation}`,
+      }),
+    } satisfies CredentialSource<AwsCredentials>;
+    const signed = createSignedFetch(source);
+
+    await signed("https://bucket.s3.us-east-1.amazonaws.com/first");
+    generation = 2;
+    await signed("https://bucket.s3.us-east-1.amazonaws.com/second");
+
+    const first = fetchMock.mock.calls[0][0] as Request;
+    const second = fetchMock.mock.calls[1][0] as Request;
+    expect(first.headers.get("authorization")).toContain("Credential=AKID1/");
+    expect(second.headers.get("authorization")).toContain("Credential=AKID2/");
+    expect(second.headers.get("x-amz-security-token")).toBe("session-2");
+  });
+
+  it("does not issue a signed request after the source refuses access", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const signed = createSignedFetch({
+      get: async () => {
+        throw new Error("credentials unavailable");
+      },
+    });
+    await expect(signed("https://bucket.s3.us-east-1.amazonaws.com/key")).rejects.toThrow(
+      "credentials unavailable",
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("lets an explicit region override the envelope's", async () => {

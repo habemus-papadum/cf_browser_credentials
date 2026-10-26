@@ -11,6 +11,7 @@
 import {
   type BrokerRouteOptions,
   CredentialManager,
+  type CredentialSource,
   type CredentialTarget,
   credentialsUrl,
   type EphemeralCredential,
@@ -65,7 +66,7 @@ export function createAwsCredentialManager(
   });
 }
 
-/** A fetch that signs each request with the manager's current credentials. */
+/** A fetch that signs each request with the source's current credentials. */
 export type SignedFetch = (input: string | Request, init?: RequestInit) => Promise<Response>;
 
 export interface SignedFetchOptions {
@@ -82,19 +83,19 @@ export interface SignedFetchOptions {
 }
 
 /**
- * Build a {@link SignedFetch} over the manager. One aws4fetch client per
+ * Build a {@link SignedFetch} over a credential source. One aws4fetch client per
  * credential session: aws4fetch caches its derived signing key per instance,
  * so the client lives until the credentials rotate.
  */
 export function createSignedFetch(
-  manager: CredentialManager<AwsCredentials>,
+  source: CredentialSource<AwsCredentials>,
   options: SignedFetchOptions = {},
 ): SignedFetch {
   const { region, service = "s3", onResponse } = options;
   let aws: AwsClient | undefined;
   let session: string | undefined;
   return async (input, init) => {
-    const creds = await manager.get();
+    const creds = await source.get();
     const signingRegion = region ?? creds.region;
     if (!signingRegion) {
       throw new Error(

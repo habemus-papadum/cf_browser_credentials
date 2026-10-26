@@ -53,3 +53,29 @@ Versions through 0.5 used AWS STS `GetWebIdentityToken` and an AWS role per gran
 The current package uses service-issued identity tokens. The old
 `createFederatedOpenAI()` and `awsSubjectTokenProvider()` entry points were removed
 in 0.6. A service that still returns the old AWS envelope requires a 0.5 client.
+
+## Inject a credential source
+
+Use a custom authentication or discovery protocol through a source:
+
+```ts
+import { createOpenAIFromSource } from "@habemus-papadum/cf-creds-openai";
+
+const client = await createOpenAIFromSource({
+  get: () => applicationCredentials.get(),
+});
+```
+
+The source returns `OpenAICredentials` and owns response validation, caching,
+renewal and cleanup. The factory makes no broker request of its own, starts
+no timer and does not substitute another credential source on failure.
+
+The first bundle fixes the client's audience, identity-provider ID and
+service-account ID. A later bundle with different coordinates is rejected
+without exposing those values. Create a new client when deliberately changing
+targets. `createBrokeredOpenAI()` uses the same coordinate check and keeps its
+existing URL options and `{ client, manager }` result.
+
+`brokeredSubjectTokenProvider()` also accepts a source. This lower-level adapter
+returns its current identity token; callers constructing the SDK themselves
+are responsible for keeping its federation coordinates consistent.

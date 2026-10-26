@@ -77,3 +77,26 @@ Set `loginUrl` to a dedicated login page, such as `/api/login`, or use
 Cross-origin development also requires the service to allow the development
 origin and credentials in its CORS response. `cf-loopback-cors` provides this
 for loopback origins.
+
+## Inject a credential source
+
+Consumers can accept a small interface instead of a `CredentialManager`:
+
+```ts
+interface CredentialSource<C> {
+  get(): Promise<C>;
+}
+interface RenewableCredentialSource<C> extends CredentialSource<C> {
+  refresh(): Promise<C>;
+}
+```
+
+Both interfaces are exported. `CredentialManager` implements them. A custom
+source can use a different service protocol or explicit credentials without
+changing the provider consumer. The source owns authentication, response
+validation, caching and renewal. Its owner also owns cleanup. These interfaces
+do not add a login flow, a timer or a credential store.
+
+AWS signed fetch and OpenAI federation need `get()`. The Mosaic connector also
+needs `refresh()` for its explicit refresh option. Existing URL-based factories
+remain available.

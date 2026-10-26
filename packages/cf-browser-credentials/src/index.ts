@@ -17,6 +17,19 @@ export interface EphemeralCredential {
   expiration: string;
 }
 
+/**
+ * Supplies current credentials. The source owns authentication, validation,
+ * caching and renewal; consumers do not need to know its transport or lifecycle.
+ */
+export interface CredentialSource<C> {
+  get(): Promise<C>;
+}
+
+/** A source that also supports an explicit renewal request. */
+export interface RenewableCredentialSource<C> extends CredentialSource<C> {
+  refresh(): Promise<C>;
+}
+
 /** The grant to request. Cloudflare Access supplies the caller's identity. */
 export interface CredentialTarget {
   /** Public grant path, sent as `?grant_path=` on same-origin and remote routes. */
@@ -190,7 +203,9 @@ export interface CredentialManagerOptions extends CredentialFetchOptions {
 
 type Listener<C> = (creds: C) => void;
 
-export class CredentialManager<C extends EphemeralCredential = EphemeralCredential> {
+export class CredentialManager<C extends EphemeralCredential = EphemeralCredential>
+  implements RenewableCredentialSource<C>
+{
   #url: string;
   #margin: number;
   #autoRefresh: boolean;

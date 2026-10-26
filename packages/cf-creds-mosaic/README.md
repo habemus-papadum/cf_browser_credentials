@@ -20,7 +20,7 @@ const manager = createAwsCredentialManager({
 });
 const base = new DuckDBWASMConnector({ duckdb: db, connection });
 const connector = credentialAwareConnector(base, manager, {
-  onInstall: (mode, creds) => console.log(`installed via ${mode}`, creds.accessKeyId),
+  onInstall: (mode) => console.log(`installed via ${mode}`),
 });
 coordinator().databaseConnector(connector);
 ```
@@ -45,3 +45,17 @@ objects on first touch — no column-pruned range reads — then serves
 everything from its filesystem cache, so a crossfilter brush over millions of
 remote rows costs a handful of requests and ~zero bytes. Budget one full read
 per file per session and interactivity is free after that.
+
+## Inject credentials
+
+The second argument accepts any `RenewableCredentialSource<AwsCredentials>`
+with `get()` and `refresh()` methods. The source owns its service protocol,
+response validation and credential lifecycle. Existing `CredentialManager`
+instances work unchanged.
+
+If credentials rotate during an install, the next query waits for its
+generation to be installed. Failed credential-install statements produce a
+fixed error without the underlying SQL or nested cause: database errors can
+otherwise contain secret values. Configure the underlying database logger to
+avoid recording credential-install SQL as well. Ordinary query errors remain
+the caller's responsibility.

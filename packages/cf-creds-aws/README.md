@@ -54,3 +54,15 @@ Before the grant path contract, a page named the *grant* it wanted:
 Brokers still serve it and the option still works, but it leaks an internal
 name into site code and returns no region. `grantPath` and `role` are mutually
 exclusive; either one requires `base`.
+
+## Inject credentials
+
+`createSignedFetch(source)` also accepts any `CredentialSource<AwsCredentials>`:
+
+```ts
+const signedFetch = createSignedFetch({ get: () => applicationCredentials.get() });
+```
+
+The source decides how to authenticate, validate and renew credentials. Each
+request asks it for current credentials. There is no broker fallback when an
+injected source refuses access. The existing manager is one such source.

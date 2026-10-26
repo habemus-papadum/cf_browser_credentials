@@ -166,3 +166,70 @@ describe("openaiCredentialsUrl", () => {
     );
   });
 });
+
+describe("createOpenAIFromSource", () => {
+  beforeEach(() => {
+    constructed.length = 0;
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it("uses an injected source without a broker request or background timer", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    let value = bundle();
+    const source = { get: vi.fn(async () => value) };
+    const { createOpenAIFromSource } = await import("./index.js");
+    await createOpenAIFromSource(source);
+    const { workloadIdentity } = constructed[0] as Constructed;
+    expect(workloadIdentity.identityProviderId).toBe(value.identityProviderId);
+    expect(workloadIdentity.serviceAccountId).toBe(value.serviceAccountId);
+    expect(await workloadIdentity.provider.getToken()).toBe(value.identityToken);
+
+    value = bundle({ identityToken: "rotated-token" });
+    expect(await workloadIdentity.provider.getToken()).toBe("rotated-token");
+    const calls = source.get.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(3_600_000);
+    expect(source.get).toHaveBeenCalledTimes(calls);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each(["audience", "identityProviderId", "serviceAccountId"])(
+    "rejects a changed %s on renewal without exposing its value",
+    async (field) => {
+      const value = bundle();
+      const source = { get: async () => value };
+      const { createOpenAIFromSource } = await import("./index.js");
+      await createOpenAIFromSource(source);
+      // Mutate the same source object to prove the initial coordinates were
+      // copied rather than retained through a mutable bundle reference.
+      Object.assign(value, { [field]: "sensitive-target-sentinel" });
+      const { workloadIdentity } = constructed[0] as Constructed;
+
+      await expect(workloadIdentity.provider.getToken()).rejects.toThrow(
+        "OpenAI credential target changed; create a new client.",
+      );
+      await expect(workloadIdentity.provider.getToken()).rejects.not.toThrow(
+        "sensitive-target-sentinel",
+      );
+    },
+  );
+
+  it("does not substitute broker credentials if the injected source refuses", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { createOpenAIFromSource } = await import("./index.js");
+    await expect(
+      createOpenAIFromSource({
+        async get() {
+          throw new Error("source unavailable");
+        },
+      }),
+    ).rejects.toThrow("source unavailable");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(constructed).toHaveLength(0);
+  });
+});

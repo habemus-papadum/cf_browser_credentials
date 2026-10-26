@@ -80,3 +80,17 @@ document.querySelector("#app")!.append(
   aware of.
 - `forceRefresh` exists for rotation torture-testing: mint on every query,
   re-install on every key change, views keep answering.
+
+## Inject credentials
+
+The second argument accepts any `RenewableCredentialSource<AwsCredentials>`
+with `get()` and `refresh()` methods. The source owns its service protocol,
+response validation and credential lifecycle. Existing `CredentialManager`
+instances work unchanged.
+
+If credentials rotate during an install, the next query waits for its
+generation to be installed. Failed credential-install statements produce a
+fixed error without the underlying SQL or nested cause: database errors can
+otherwise contain secret values. Configure the underlying database logger to
+avoid recording credential-install SQL as well. Ordinary query errors remain
+the caller's responsibility.
