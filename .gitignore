@@ -26,3 +26,6 @@ pnpm-debug.log*
 .npmrc-publish
 docs/.vitepress/cache/
 docs/.vitepress/dist/
+
+# ship (uv) environment
+.venv/

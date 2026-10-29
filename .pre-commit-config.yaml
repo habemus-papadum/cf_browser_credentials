@@ -1,0 +1,8 @@
+# ship-check rejects a commit with a link:/file: dependency, a path/editable uv source,
+# a stale lockfile or a stale skill copy. Install once with `uv run pre-commit install`
+# (or `uvx pre-commit install`); CI runs the same check through `ship deps check`.
+repos:
+  - repo: https://github.com/habemus-papadum/pdum_ship
+    rev: habemus-papadum-ship-v0.3.0
+    hooks:
+      - id: ship-check

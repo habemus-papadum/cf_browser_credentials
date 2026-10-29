@@ -3,10 +3,10 @@
 //
 // Usage: pnpm new-package <name> [--private] [--description "..."]
 //
-// The new package joins version lockstep immediately (it adopts the current shared
-// version). No other file needs editing — the packages/* glob picks it up everywhere.
+// The new package starts at 0.0.0+dev with no tag; its first `ship release` computes
+// 0.1.0 (minor) or 0.0.1 (patch). No other file needs editing — the packages/* glob
+// picks it up everywhere, including ship's package discovery.
 
-import { execFileSync } from "node:child_process";
 import {
   cpSync,
   existsSync,
@@ -97,10 +97,8 @@ function main() {
   }
 
   const { scope, repoUrl } = deriveContext();
-  const version = execFileSync("node", [join(scriptsDir, "versioning.mjs"), "current"], {
-    cwd: repoRoot,
-    encoding: "utf8",
-  }).trim();
+  // ship's development marker for a package that has never been released.
+  const version = "0.0.0+dev";
 
   cpSync(skeletonDir, dest, { recursive: true });
 

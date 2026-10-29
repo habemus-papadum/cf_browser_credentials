@@ -3,7 +3,7 @@
   "version": "0.8.0+dev",
   "private": true,
   "type": "module",
-  "description": "cf_browser_credentials — a lockstep-versioned TypeScript monorepo.",
+  "description": "cf_browser_credentials \u2014 browser credential kit for Cloudflare Access-protected brokers.",
   "author": "Nehal Patel <nehal@alum.mit.edu>",
   "license": "MIT",
   "engines": {
@@ -18,7 +18,6 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "new-package": "node scripts/new-package.mjs",
-    "version:check": "node scripts/versioning.mjs current",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs"

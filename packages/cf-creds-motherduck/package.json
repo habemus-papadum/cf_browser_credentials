@@ -31,14 +31,13 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
   },
-  "dependencies": {
-    "@habemus-papadum/cf-browser-credentials": "workspace:^"
-  },
   "devDependencies": {
+    "@habemus-papadum/cf-browser-credentials": "workspace:*",
     "@motherduck/wasm-client": "^1.5.5-r.1",
     "apache-arrow": "^17.0.0"
   },
   "peerDependencies": {
+    "@habemus-papadum/cf-browser-credentials": "workspace:>=0.8.0",
     "@motherduck/wasm-client": ">=1.5.5-r.1",
     "apache-arrow": "^17.0.0"
   },

@@ -28,38 +28,37 @@ importers:
 
   packages/cf-creds-aws:
     dependencies:
-      '@habemus-papadum/cf-browser-credentials':
-        specifier: workspace:^
-        version: link:../cf-browser-credentials
       aws4fetch:
         specifier: ^1.0.20
         version: 1.0.20
+    devDependencies:
+      '@habemus-papadum/cf-browser-credentials':
+        specifier: workspace:*
+        version: link:../cf-browser-credentials
 
   packages/cf-creds-elevenlabs:
-    dependencies:
+    devDependencies:
       '@habemus-papadum/cf-browser-credentials':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../cf-browser-credentials
 
   packages/cf-creds-mosaic:
-    dependencies:
+    devDependencies:
       '@habemus-papadum/cf-browser-credentials':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../cf-browser-credentials
       '@habemus-papadum/cf-creds-aws':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../cf-creds-aws
-    devDependencies:
       '@uwdata/mosaic-core':
         specifier: ^0.29.2
         version: 0.29.2
 
   packages/cf-creds-motherduck:
-    dependencies:
-      '@habemus-papadum/cf-browser-credentials':
-        specifier: workspace:^
-        version: link:../cf-browser-credentials
     devDependencies:
+      '@habemus-papadum/cf-browser-credentials':
+        specifier: workspace:*
+        version: link:../cf-browser-credentials
       '@motherduck/wasm-client':
         specifier: ^1.5.5-r.1
         version: 1.5.5-r.1(apache-arrow@17.0.0)
@@ -68,11 +67,10 @@ importers:
         version: 17.0.0
 
   packages/cf-creds-openai:
-    dependencies:
-      '@habemus-papadum/cf-browser-credentials':
-        specifier: workspace:^
-        version: link:../cf-browser-credentials
     devDependencies:
+      '@habemus-papadum/cf-browser-credentials':
+        specifier: workspace:*
+        version: link:../cf-browser-credentials
       openai:
         specifier: ^7.4.0
         version: 7.4.0(@aws-sdk/credential-provider-node@3.972.78)(@smithy/signature-v4@5.6.12)
@@ -84,9 +82,9 @@ importers:
         version: 1.0.20
 
   packages/cf-creds-zarr:
-    dependencies:
+    devDependencies:
       '@habemus-papadum/cf-creds-aws':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../cf-creds-aws
 
   packages/cf-loopback-cors: {}

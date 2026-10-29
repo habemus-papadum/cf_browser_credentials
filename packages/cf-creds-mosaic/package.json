@@ -31,14 +31,14 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
   },
-  "dependencies": {
-    "@habemus-papadum/cf-browser-credentials": "workspace:^",
-    "@habemus-papadum/cf-creds-aws": "workspace:^"
-  },
   "devDependencies": {
+    "@habemus-papadum/cf-browser-credentials": "workspace:*",
+    "@habemus-papadum/cf-creds-aws": "workspace:*",
     "@uwdata/mosaic-core": "^0.29.2"
   },
   "peerDependencies": {
+    "@habemus-papadum/cf-browser-credentials": "workspace:>=0.8.0",
+    "@habemus-papadum/cf-creds-aws": "workspace:>=0.8.0",
     "@uwdata/mosaic-core": ">=0.28 <0.31"
   },
   "peerDependenciesMeta": {
