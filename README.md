@@ -68,7 +68,7 @@ uv run ship release @habemus-papadum/cf-creds-aws --bump minor --dry-run
 
 Add an npm automation token as the `NPM_TOKEN` Actions secret (Settings → Secrets and variables →
 Actions). Locally, `uv sync` installs ship (it is the only Python dependency; `pyproject.toml`
-exists for it) and `uv run pre-commit install` enables the `ship-check` hook.
+exists for it) and `uvx pre-commit install` enables the `ship-check` hook.
 
 ## Layout
 
