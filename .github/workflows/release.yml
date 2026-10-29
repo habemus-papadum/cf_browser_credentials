@@ -37,4 +37,5 @@ jobs:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     permissions:
       contents: write
+      id-token: write   # npm provenance attestations
       actions: read
