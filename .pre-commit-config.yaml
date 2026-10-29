@@ -3,6 +3,6 @@
 # (or `uvx pre-commit install`); CI runs the same check through `ship deps check`.
 repos:
   - repo: https://github.com/habemus-papadum/pdum_ship
-    rev: habemus-papadum-ship-v0.3.0
+    rev: habemus-papadum-ship-v0.4.0
     hooks:
       - id: ship-check
