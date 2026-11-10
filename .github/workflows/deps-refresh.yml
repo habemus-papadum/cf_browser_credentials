@@ -30,6 +30,6 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
-      - uses: habemus-papadum/pdum_ship/.github/actions/refresh@132af447b7055d512049f38cab45ab0da1585705
+      - uses: habemus-papadum/pdum_ship/.github/actions/refresh@5468b46348ed93d81bd2f9c103fb27c76a524662
         with:
           ci_workflow: ci.yml
