@@ -29,3 +29,6 @@ docs/.vitepress/dist/
 
 # ship (uv) environment
 .venv/
+
+# Weekly refresh diagnostics are retained as workflow artifacts.
+.ship-refresh/

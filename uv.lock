@@ -24,7 +24,7 @@ dev = [
 [package.metadata]
 
 [package.metadata.requires-dev]
-dev = [{ name = "habemus-papadum-ship", specifier = ">=0.3" }]
+dev = [{ name = "habemus-papadum-ship", specifier = ">=0.12.0" }]
 
 [[package]]
 name = "colorama"
@@ -37,15 +37,16 @@ wheels = [
 
 [[package]]
 name = "habemus-papadum-ship"
-version = "0.9.0"
+version = "0.12.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "packaging" },
     { name = "pyyaml" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0b/0c/21e94bf452ec0e83ca7432f09b0224d52d4061e7ec653e69becbb6fb4b2a/habemus_papadum_ship-0.9.0.tar.gz", hash = "sha256:de07ec7ba1bb748fb5efaa1fe580c019bfbb698b73dd28a4067d47271f3973d9", size = 93568, upload-time = "2026-10-29T19:54:01.443Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e6/40/04b77bb2a1b47e152e11b42ec0069b377770d672354dbe7df76db91b0607/habemus_papadum_ship-0.12.0.tar.gz", hash = "sha256:d02c9021aed1d1f61910c43d48b644ed1fa15bffef5a96810e237b3e31ec1329", size = 162790, upload-time = "2026-11-10T17:02:12.072Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/38/1a/616f7c455cd8299afb31e9a9618b59e2f80f6275d0cf2e54ba77f7e4048e/habemus_papadum_ship-0.9.0-py3-none-any.whl", hash = "sha256:e205fdff69fb681c19e69f4174ab7580ed3545472638e4a40d5114929fd4a1f2", size = 52991, upload-time = "2026-10-29T19:53:59.966Z" },
+    { url = "https://files.pythonhosted.org/packages/30/54/85ae01e13d0f055f412aa4d6b23c42273046d851e67b38242dcd430da564/habemus_papadum_ship-0.12.0-py3-none-any.whl", hash = "sha256:2ce78db8dd925fbcbcbc363dd5e67d40d8368987afd9410fcb999592ccf10d65", size = 75592, upload-time = "2026-11-10T17:02:11.023Z" },
 ]
 
 [[package]]
@@ -67,6 +68,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d6/54/cfe61301667036ec958cb99bd3efefba235e65cdeb9c84d24a8293ba1d90/mdurl-0.1.2.tar.gz", hash = "sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba", size = 8729, upload-time = "2022-08-14T12:40:10.846Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8", size = 9979, upload-time = "2022-08-14T12:40:09.779Z" },
+]
+
+[[package]]
+name = "packaging"
+version = "26.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/7d/fa/3944b40b07da9ce895c0e6303a5ab7d53da063554f534556b134a54d6093/packaging-26.3.tar.gz", hash = "sha256:94edc256424af38762eb31306eed28beb9f0efc50a8837492c9d6fd6004aed79", size = 313412, upload-time = "2026-08-04T18:15:28.737Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/63/34/ba1c580383c9eada3711951fef0795c80b829a078d72188184bcab9dd527/packaging-26.3-py3-none-any.whl", hash = "sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c", size = 129956, upload-time = "2026-08-04T18:15:27.159Z" },
 ]
 
 [[package]]
